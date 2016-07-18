@@ -1,12 +1,22 @@
 FROM nginx:alpine
 
-RUN apk update && apk add -u python py-pip openssl curl mc
-RUN pip install supervisor
-RUN curl https://get.acme.sh | sh
-RUN rm /etc/nginx/fastcgi* /etc/nginx/koi* /etc/nginx/win* /etc/nginx/*.default /etc/nginx/*_params
+# remove trash
+RUN rm -f /etc/nginx/fastcgi* /etc/nginx/koi* /etc/nginx/win* /etc/nginx/*.default /etc/nginx/*_params /etc/conf.d/*.conf 
 
-# clean apk cache
-RUN rm -rf /var/cache/apk/*
+# for docker / supervisor
+#RUN echo "daemon off;" >> /etc/nginx/nginx.conf && \
+
+RUN apk update && apk add -u python py-pip openssl curl mc git && \
+    pip install supervisor && \
+    mkdir /persist && \
+    cd && git clone https://github.com/Neilpang/acme.sh.git acmegit && \
+    cd acmegit && sh acme.sh \
+	--install \
+	--certhome /persist/certs \
+	--accountkey /persist/account.key \
+	--accountconf /persist/account.conf && \
+    rm -Rf /root/acmegit && \
+    rm -Rf /var/cache/apk/*
 
 
 # ENTRYPOINT ["supervisord", "--nodaemon", "--configuration", "/etc/supervisord.conf"]
