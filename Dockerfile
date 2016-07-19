@@ -16,6 +16,4 @@ RUN apk update && apk add -u python3 openssl curl mc git && \
     rm -Rf /root/acmegit && rm -Rf /var/cache/apk/*
 
 COPY keeper.py /keeper.py
-
-# ENTRYPOINT ["supervisord", "--nodaemon", "--configuration", "/etc/supervisord.conf"]
-# CMD ["nginx", "-g", "daemon off;"]
+CMD ["dumb-init", "python3", "/keeper.py"]

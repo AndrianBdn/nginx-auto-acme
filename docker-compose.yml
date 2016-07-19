@@ -1,0 +1,15 @@
+version: '2'
+services: 
+    nginx:
+        build: .
+        ports: 
+            - "443:443"
+            - "80:80"
+        volumes:
+            - ./persist:/persist
+            - ./conf.body:/etc/nginx/conf.body:ro
+        logging:
+            driver: json-file
+            options:
+                max-size: "10m"
+                max-file: "3"
