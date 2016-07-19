@@ -3,21 +3,19 @@ FROM nginx:alpine
 # remove trash
 RUN rm -f /etc/nginx/fastcgi* /etc/nginx/koi* /etc/nginx/win* /etc/nginx/*.default /etc/nginx/*_params /etc/conf.d/*.conf 
 
-# for docker / supervisor
-#RUN echo "daemon off;" >> /etc/nginx/nginx.conf && \
-
-RUN apk update && apk add -u python py-pip openssl curl mc git && \
-    pip install supervisor && \
+RUN apk update && apk add -u python3 openssl curl mc git && \
     mkdir /persist && \
+    curl -L -o /usr/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.1.1/dumb-init_1.1.1_amd64 && \
+    chmod 755 /usr/bin/dumb-init && \
     cd && git clone https://github.com/Neilpang/acme.sh.git acmegit && \
     cd acmegit && sh acme.sh \
 	--install \
 	--certhome /persist/certs \
-	--accountkey /persist/account.key \
-	--accountconf /persist/account.conf && \
-    rm -Rf /root/acmegit && \
-    rm -Rf /var/cache/apk/*
+	--accountkey /persist/account.key && \
+    apk del git && \
+    rm -Rf /root/acmegit && rm -Rf /var/cache/apk/*
 
+COPY keeper.py /keeper.py
 
 # ENTRYPOINT ["supervisord", "--nodaemon", "--configuration", "/etc/supervisord.conf"]
 # CMD ["nginx", "-g", "daemon off;"]
