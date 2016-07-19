@@ -190,6 +190,10 @@ def acme_issue(domains):
     return result.returncode
 
 def acme_install(domains):
+    nginx_persist_dir = os.path.dirname(NGINX_CRT)
+    if not os.path.isdir(nginx_persist_dir):
+        os.mkdir(nginx_persist_dir);
+
     args = [ACME_SH, '--installcert'] + acme_d_args(domains);
     args += ['--fullchainpath', NGINX_CRT, '--keypath', NGINX_KEY]
     result = shellrun(args) 
@@ -204,6 +208,9 @@ def nginx_start():
     else:
         nginx_restart()
 
+def nginx_configtest() 
+    result = shellrun('nginx -t')
+    return result.returncode
 
 def nginx_restart():
     shellrun('nginx -s reload')
@@ -217,7 +224,12 @@ def cron_4hour():
 def main(argv): 
     domains = gen_config()
     if domains is None: 
+        sys.stderr.write("Cannot find any conf.body domains\n")
+        sys.exit(1)
         return 0
+
+    if len(argv) > 1 and argv[1] == 'configtest':
+        os.exit(nginx_configtest())
 
     nginx_start()
 
