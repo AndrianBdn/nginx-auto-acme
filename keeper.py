@@ -95,7 +95,7 @@ def tls_domain_exists(domain):
     return os.path.isfile(DOMAIN_CERT_PATH+domain)
 
 def tls_cert_exists():
-    return os.path.isfile(NGINX_CRT) and os.path.isfile(NGINX_KEY)
+    return read_file(NGINX_CRT).find('BEGIN CERTIFICATE') > -1 and read_file(NGINX_KEY).find('BEGIN RSA PRIVATE KEY') > -1 
 
 def read_file(path, fallback=''):
     if not os.path.isfile(path):
@@ -208,7 +208,7 @@ def nginx_start():
     else:
         nginx_restart()
 
-def nginx_configtest() 
+def nginx_configtest():
     result = shellrun('nginx -t')
     return result.returncode
 
