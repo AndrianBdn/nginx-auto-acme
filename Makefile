@@ -1,6 +1,6 @@
 # Do not edit me with phpStorm, which converts all tabs with spaces
 
-NAME = andrianbdn/nginx-auto-tinyacme
+NAME = andrianbdn/nginx-auto-acme
 
 .PHONY: image img hub all
 
