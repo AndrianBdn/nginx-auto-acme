@@ -8,13 +8,13 @@ import zlib #for crc32
 import pprint
 from textwrap import dedent
 
-# special file besides regular docker logging 
+# special file besides regular docker logging
 RENEW_LOG_FILE = "/persist/important.txt"
 
-# acme.sh path 
+# acme.sh path
 ACME_SH = '/root/.acme.sh/acme.sh'
 
-# acme.conf 
+# acme.conf
 ACME_ACCOUNT_PERSIST = '/persist/account.conf'
 ACME_ACCOUNT_CONF = '/root/.acme.sh/account.conf'
 
@@ -24,27 +24,27 @@ ACME_CERTS_PATH = '/persist/certs/'
 # this is path to dir for user config bodies
 CONF_BODY_PATH = '/etc/nginx/conf.body/'
 
-# for letsencrypt verification 
+# for letsencrypt verification
 WELL_KNOWN_ACME = '/etc/nginx/acme'
 
 # actual-factual key and crt
 NGINX_KEY = '/persist/nginx/all.key'
 NGINX_CRT = '/persist/nginx/all.crt'
 
-# standard nginx.conf 
+# standard nginx.conf
 NGINX_CONF = '/etc/nginx/conf.d/'
 
-# last domains 
+# last domains
 LAST_DOMAINS_FILE = '/persist/last-domains.txt'
 
 # timestamp for cron-like stuff
 LAST_TIME_FILE = '/persist/last-time.txt'
 
-def log_fmt(string): 
+def log_fmt(string):
     return "{} {}\n".format(time.strftime("%c"), string)
 
-def file_log(string): 
-    with open(RENEW_LOG_FILE, "a") as file: 
+def file_log(string):
+    with open(RENEW_LOG_FILE, "a") as file:
         file.write(log_fmt(string))
 
 def stderr_log(string):
@@ -228,7 +228,7 @@ def nginx_start():
     pid = read_file('/var/run/nginx.pid', '-1')
     cmdline = read_file('/proc/'+pid+'/cmdline')
     if cmdline.find('nginx') == -1:
-        shellrun('nginx')
+        subprocess.run('nginx', shell=True)
     else:
         nginx_restart()
 
