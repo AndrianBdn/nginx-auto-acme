@@ -4,37 +4,56 @@ import re
 import os
 import sys
 import subprocess
-from textwrap import dedent 
+import zlib #for crc32
+import pprint
+from textwrap import dedent
 
+# special file besides regular docker logging 
+RENEW_LOG_FILE = "/persist/important.txt"
 
 # acme.sh path 
-ACME_SH='/root/.acme.sh/acme.sh'
+ACME_SH = '/root/.acme.sh/acme.sh'
 
 # acme.conf 
-ACME_ACCOUNT_PERSIST='/persist/account.conf';
-ACME_ACCOUNT_CONF='/root/.acme.sh/account.conf'
+ACME_ACCOUNT_PERSIST = '/persist/account.conf'
+ACME_ACCOUNT_CONF = '/root/.acme.sh/account.conf'
 
 # acme certs
-ACME_CERTS_PATH='/persist/certs/'
+ACME_CERTS_PATH = '/persist/certs/'
 
 # this is path to dir for user config bodies
-CONF_BODY_PATH='/etc/nginx/conf.body/'
+CONF_BODY_PATH = '/etc/nginx/conf.body/'
 
 # for letsencrypt verification 
-WELL_KNOWN_ACME='/etc/nginx/acme'
+WELL_KNOWN_ACME = '/etc/nginx/acme'
 
 # actual-factual key and crt
-NGINX_KEY='/persist/nginx/all.key'
-NGINX_CRT='/persist/nginx/all.crt'
+NGINX_KEY = '/persist/nginx/all.key'
+NGINX_CRT = '/persist/nginx/all.crt'
 
 # standard nginx.conf 
-NGINX_CONF='/etc/nginx/conf.d/'
+NGINX_CONF = '/etc/nginx/conf.d/'
 
 # last domains 
-LAST_DOMAINS_FILE='/persist/last-domains.txt'
+LAST_DOMAINS_FILE = '/persist/last-domains.txt'
 
 # timestamp for cron-like stuff
-LAST_TIME_FILE='/persist/last-time.txt'
+LAST_TIME_FILE = '/persist/last-time.txt'
+
+def log_fmt(string): 
+    return "{} {}\n".format(time.strftime("%c"), string)
+
+def file_log(string): 
+    with open(RENEW_LOG_FILE, "a") as file: 
+        file.write(log_fmt(string))
+
+def stderr_log(string):
+    sys.stderr.write(log_fmt(string))
+
+def all_log(string):
+    file_log(string)
+    stderr_log(string)
+
 
 def ssl_config():
     if not os.path.isfile('/persist/dhparams.pem'):
@@ -75,15 +94,15 @@ def http_config(domain):
 
 def https_config(domain, body):
 
-    if re.search('server\s+{', body) is not None:
+    if re.search(r'server\s+{', body) is not None:
         return None 
 
     template = dedent(
     """
-    server {{ 
+    server {{
         server_name {domain};
         listen 443 ssl http2;
-        ssl on; 
+        ssl on;
         ssl_certificate      {crt};
         ssl_certificate_key  {key};
         {body}
@@ -91,25 +110,28 @@ def https_config(domain, body):
     """)
     return template.format(domain=domain, body=body, key=NGINX_KEY, crt=NGINX_CRT)
 
-def tls_domain_exists(domain):
-    return os.path.isfile(DOMAIN_CERT_PATH+domain)
 
 def tls_cert_exists():
-    return read_file(NGINX_CRT).find('BEGIN CERTIFICATE') > -1 and read_file(NGINX_KEY).find('BEGIN RSA PRIVATE KEY') > -1 
+    return read_file(NGINX_CRT).find('BEGIN CERTIFICATE') > -1 and read_file(NGINX_KEY).find('BEGIN RSA PRIVATE KEY') > -1
+
+
+def tls_cert_hash(): 
+    return zlib.crc32(read_file(NGINX_CRT))
+
 
 def read_file(path, fallback=''):
     if not os.path.isfile(path):
         return fallback
 
-    with open(path, 'r') as f:
-        return f.read()
+    with open(path, 'r') as file:
+        return file.read()
 
 def write_file(path, body):
-    with open(path, 'w') as f:
-        f.write(body)
+    with open(path, 'w') as file:
+        file.write(body)
 
 
-def https_config_error():
+def https_config_error(domain):
     sys.stderr.write("Error: config for " + domain + " should not contain server block\n")
     sys.stderr.write("This is not regular nginx config\n")
     sys.exit(1)
@@ -140,7 +162,7 @@ def gen_config():
             config_body = read_file(CONF_BODY_PATH + domain + '.conf')
             tls_config = https_config(domain, config_body)
             if https_config is None:
-                https_config_error()
+                https_config_error(domain)
             new_config += tls_config
 
         write_file(NGINX_CONF + domain + '.conf', new_config)
@@ -169,7 +191,10 @@ def shellrun(args):
     cmd = args
     if isinstance(cmd, list):
         cmd = ' '.join(cmd)
-    return subprocess.run(cmd, shell=True)
+    all_log("calling {}".format(cmd))
+    result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    all_log("result: {}".format(pprint.pformat(result)))
+    return result 
     
 
 def acme_issue(domains):
@@ -177,12 +202,12 @@ def acme_issue(domains):
 
     args = [ACME_SH, '--issue'] + acme_d_args(domains) + ['-w', WELL_KNOWN_ACME]
     if os.path.isfile(ACME_ACCOUNT_PERSIST):
-        shutil.copy(ACME_ACCOUNT_PERSIST, ACME_ACCOUNT_CONF);
+        shutil.copy(ACME_ACCOUNT_PERSIST, ACME_ACCOUNT_CONF)
 
     result = shellrun(args)
 
     if os.path.isfile(ACME_ACCOUNT_CONF):
-        shutil.copy(ACME_ACCOUNT_CONF, ACME_ACCOUNT_PERSIST);
+        shutil.copy(ACME_ACCOUNT_CONF, ACME_ACCOUNT_PERSIST)
 
     if result.returncode == 0:
         set_issued(domains)
@@ -192,12 +217,11 @@ def acme_issue(domains):
 def acme_install(domains):
     nginx_persist_dir = os.path.dirname(NGINX_CRT)
     if not os.path.isdir(nginx_persist_dir):
-        os.mkdir(nginx_persist_dir);
+        os.mkdir(nginx_persist_dir)
 
-    args = [ACME_SH, '--installcert'] + acme_d_args(domains);
+    args = [ACME_SH, '--installcert'] + acme_d_args(domains)
     args += ['--fullchainpath', NGINX_CRT, '--keypath', NGINX_KEY]
     result = shellrun(args) 
-    print(result)
     return result.returncode 
 
 def nginx_start():
@@ -215,13 +239,21 @@ def nginx_configtest():
 def nginx_restart():
     shellrun('nginx -s reload')
 
+
 def cron_4hour():
-    sys.stderr.write('running acme.sh cron')
-    result = shellrun([ACME_SH, '--cron', '--home /root/.acme.sh/'])
-    if result.returncode == 23:
+    all_log('running 24h renewal check')
+
+    before_renew = tls_cert_hash()
+    shellrun([ACME_SH, '--cron', '--home /root/.acme.sh/'])
+    after_renew = tls_cert_hash() 
+
+    if before_renew != after_renew:
+        all_log("cert hash differs, reloading nginx")
         nginx_restart()
 
+
 def main(argv): 
+    all_log("started")
     domains = gen_config()
     if domains is None: 
         sys.stderr.write("Cannot find any conf.body domains\n")
@@ -229,7 +261,7 @@ def main(argv):
         return 0
 
     if len(argv) > 1 and argv[1] == 'configtest':
-        os.exit(nginx_configtest())
+        sys.exit(nginx_configtest())
 
     nginx_start()
 
@@ -239,13 +271,13 @@ def main(argv):
         gen_config()
         nginx_restart()
 
-    HOUR4 = 14400
-    HOUR24 = 86400
+    hour_4 = 14400
+    hour_24 = 86400
     while True:
-        time.sleep(HOUR4)
+        time.sleep(hour_4)
         old_time = float(read_file(LAST_TIME_FILE, '0'))
         timestamp = time.time()
-        if timestamp - old_time >= HOUR24:
+        if timestamp - old_time >= hour_24:
             cron_4hour()
             write_file(LAST_TIME_FILE, str(timestamp))
 
@@ -253,5 +285,3 @@ def main(argv):
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv))
-
-
