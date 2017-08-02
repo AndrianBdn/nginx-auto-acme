@@ -270,6 +270,8 @@ def main(argv):
         acme_install(domains)
         gen_config()
         nginx_restart()
+    else:
+        cron_4hour()
 
     hour_4 = 14400
     hour_24 = 86400
