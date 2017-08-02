@@ -116,7 +116,7 @@ def tls_cert_exists():
 
 
 def tls_cert_hash(): 
-    return zlib.crc32(read_file(NGINX_CRT))
+    return zlib.crc32(read_file(NGINX_CRT).encode("utf8"))
 
 
 def read_file(path, fallback=''):
