@@ -122,6 +122,7 @@ def https_config(domain, body):
         ssl on;
         ssl_certificate      {crt};
         ssl_certificate_key  {key};
+        server_tokens        off;
         {body}
     }}
     """)
