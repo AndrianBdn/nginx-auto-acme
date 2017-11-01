@@ -16,6 +16,11 @@ Run container using docker-compose
 First run will take some time to generate dhparams 
 
 
+## TLS 1.2 by default  
+
+Read README.md in conf.body folder to enable older TLS.
+
+
 ## Acknowledgments 
 
 - [acme.sh](https://github.com/Neilpang/acme.sh) letsencrypt ACME client in pure shell 
