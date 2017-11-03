@@ -47,16 +47,18 @@ def file_log(string):
     with open(RENEW_LOG_FILE, "a") as file:
         file.write(log_fmt(string))
 
-def stderr_log(string):
+def stderr_log(string, flush=False):
     sys.stderr.write(log_fmt(string))
+    if flush: 
+        sys.stderr.flush() 
 
-def all_log(string):
+def all_log(string, flush=False):
     file_log(string)
-    stderr_log(string)
-
+    stderr_log(string, flush)
 
 def ssl_config():
     if not os.path.isfile('/persist/dhparams.pem'):
+        all_log("don't see dhparams.pem, will generate new one: this may take long time...", True)
         shellrun('cd /persist && openssl dhparam -out dhparams.pem 2048')
 
 

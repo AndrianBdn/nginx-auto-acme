@@ -11,7 +11,28 @@ Write **bodies of nginx server blocks** to config.body directory. File names sho
 
 'persist' directory is used to store letsencrypt key, certs (no need to change anything there)
 
-Run container using docker-compose 
+Run container using docker-compose: 
+
+```yaml  
+version: '2'
+services:
+    nginx:
+        image: andrianbdn/nginx-auto-acme 
+        restart: unless-stopped
+        ports:
+            - "443:443"
+            - "80:80"
+        volumes:
+            - ./persist:/persist
+            - ./conf.body:/etc/nginx/conf.body:ro
+        logging:
+            driver: json-file
+            options:
+                max-size: "10m"
+                max-file: "3"
+```
+
+**Do not change** 443 and 80 port mappings, otherwise this letsencrypt wont be able to issue TLS certificate. 
 
 First run will take some time to generate dhparams 
 
