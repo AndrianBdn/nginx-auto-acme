@@ -98,6 +98,7 @@ def http_config(domain):
     server {{
         server_name {domain};
         listen 80; 
+        server_tokens off;
 
         location /.well-known/acme-challenge/ {{
             root {acmeroot};
