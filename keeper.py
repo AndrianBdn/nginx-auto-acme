@@ -225,7 +225,15 @@ def shellrun(args):
         cmd = ' '.join(cmd)
     all_log("calling {}".format(cmd))
     result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    all_log("result: {}".format(pprint.pformat(result)))
+    
+    all_log("{}: return code {}".format(result.args, result.returncode))
+    
+    if len(result.stdout) > 0
+        all_log("{}: stdout {}".format(result.args, result.stdout))
+
+    if len(result.stderr) > 0
+        all_log("{}: stderr {}".format(result.args, result.stderr))
+
     return result 
     
 
