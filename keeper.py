@@ -228,10 +228,10 @@ def shellrun(args):
     
     all_log("{}: return code {}".format(result.args, result.returncode))
     
-    if len(result.stdout) > 0
+    if len(result.stdout) > 0:
         all_log("{}: stdout {}".format(result.args, result.stdout))
 
-    if len(result.stderr) > 0
+    if len(result.stderr) > 0:
         all_log("{}: stderr {}".format(result.args, result.stderr))
 
     return result 
