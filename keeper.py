@@ -64,7 +64,7 @@ def ssl_config():
         shellrun('cd /persist && openssl dhparam -out dhparams.pem 2048')
         if os.path.isfile('/persist/dhparams.pem'):
             all_log("created dhparams.pem, looks good", True)
-        else 
+        else: 
             all_log("dhparams.pem does not exists, fail", True)
 
 
