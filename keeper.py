@@ -26,6 +26,9 @@ ACME_CERTS_PATH = '/persist/certs/'
 # this is path to dir for user config bodies
 CONF_BODY_PATH = '/etc/nginx/conf.body/'
 
+# main nginx.conf
+NGINX_ROOT_CONF = '/etc/nginx/nginx.conf'
+
 # for letsencrypt verification
 WELL_KNOWN_ACME = '/etc/nginx/acme'
 
@@ -173,9 +176,31 @@ def read_conf_dir(path):
     conf_list = map(lambda x: x[:-5], conf_list)
     return sorted(conf_list)
 
+def edit_root_config():
+    keys = ['worker_processes']
+
+    lines = [line.rstrip('\n') for line in open(NGINX_ROOT_CONF)]
+
+    modified = False 
+    result = ''
+    for line in lines: 
+       for key in keys: 
+            envkey = key.upper() 
+            if envkey in os.environ and line.find(key) != -1: 
+                modified = True 
+                result = result + key + " " + os.environ[envkey] + ";\n"
+            else: 
+                result = result + line + "\n"
+
+    if modified: 
+        conf = open(NGINX_ROOT_CONF, 'w')
+        conf.write(result)
+        conf.close() 
 
 
 def gen_config():
+    edit_root_config() 
+
     # clean older configs
     shutil.rmtree(NGINX_CONF, ignore_errors=True)
     os.mkdir(NGINX_CONF)
