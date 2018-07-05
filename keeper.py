@@ -8,7 +8,7 @@ import sys
 import subprocess
 import zlib #for crc32
 import pprint
-from textwrap import dedent
+import textwrap 
 
 # special file besides regular docker logging
 RENEW_LOG_FILE = "/persist/important.txt"
@@ -69,7 +69,7 @@ def ssl_config():
 
 
     if os.path.isfile(CONF_BODY_PATH + 'tls1_0.legacy'): 
-        return dedent(
+        return textwrap.dedent(
         """
         ssl_ciphers "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK";
         ssl_dhparam /persist/dhparams.pem;
@@ -83,7 +83,7 @@ def ssl_config():
         resolver_timeout 5s;
         """)
     else:
-        return dedent(
+        return textwrap.dedent(
         """
         ssl_ciphers 'ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256';
         ssl_dhparam /persist/dhparams.pem;
@@ -99,7 +99,7 @@ def ssl_config():
 
 
 def http_config(domain):
-    template = dedent(
+    template = textwrap.dedent(
     """
     server {{
         server_name {domain};
@@ -123,7 +123,7 @@ def https_config(domain, body):
     if re.search(r'server\s+{', body) is not None:
         return None 
 
-    template = dedent(
+    template = textwrap.dedent(
     """
     server {{
         server_name {domain};
@@ -228,11 +228,13 @@ def shellrun(args):
     
     all_log("{}: return code {}".format(result.args, result.returncode))
     
+    p = lambda n, t: all_log("{}: {} {}".format(result.args, n, textwrap.indent(t.decode('utf-8'), '  ')))
+
     if len(result.stdout) > 0:
-        all_log("{}: stdout {}".format(result.args, result.stdout))
+        p('stdout', result.stdout)
 
     if len(result.stderr) > 0:
-        all_log("{}: stderr {}".format(result.args, result.stderr))
+        p('stderr', result.stderr)
 
     return result 
     
