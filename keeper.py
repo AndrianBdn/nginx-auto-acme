@@ -128,7 +128,6 @@ def https_config(domain, body):
     server {{
         server_name {domain};
         listen 443 ssl http2;
-        ssl on;
         ssl_certificate      {crt};
         ssl_certificate_key  {key};
         server_tokens        off;
