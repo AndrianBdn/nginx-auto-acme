@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import time
 import shutil
 import re
@@ -160,7 +162,11 @@ def https_config_error(domain):
 
 def read_conf_dir(path):
     conf_list = os.listdir(path)
-    conf_list = filter(lambda x: x.endswith('.conf'), conf_list)
+    
+    # filter out files that does not contain dots, except in .conf  
+    conf_regex = re.compile('[\\w\\.]+\\.\\w+\\.conf')
+
+    conf_list = filter(conf_regex.match, conf_list)
     conf_list = map(lambda x: x[:-5], conf_list)
     return sorted(conf_list)
 
@@ -171,7 +177,9 @@ def gen_config():
     shutil.rmtree(NGINX_CONF, ignore_errors=True)
     os.mkdir(NGINX_CONF)
 
-    write_file(NGINX_CONF +  '/ssl.conf', ssl_config())
+    write_file(NGINX_CONF + '/ssl.conf', ssl_config())
+    write_file(NGINX_CONF + '/_nginx-http.conf', read_file(CONF_BODY_PATH + '/_nginx-http.conf'))
+
 
     # read user configs
     domains = read_conf_dir(CONF_BODY_PATH)

@@ -9,6 +9,8 @@ The whole promise is similar to Caddy server — you are getting HTTP/2 web serv
 
 Write **bodies of nginx server blocks** to config.body directory. File names should be domains names + '.conf'. 
 
+If you need to define upstream or something else outside of server blocks, put it to file \_nginx-http.conf in config.body directory. 
+
 'persist' directory is used to store letsencrypt key, certs (no need to change anything there)
 
 Run container using docker-compose: 

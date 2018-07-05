@@ -15,5 +15,8 @@ RUN apk update && apk add -u python3 openssl curl mc git && \
     apk del git && \
     rm -Rf /root/acmegit && rm -Rf /var/cache/apk/*
 
-COPY keeper.py /keeper.py
-CMD ["dumb-init", "python3", "/keeper.py"]
+COPY keeper.py /bin/nginx-keeper
+RUN chmod 755 /bin/nginx-keeper
+
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+CMD ["nginx-keeper"]
