@@ -62,6 +62,10 @@ def ssl_config():
     if not os.path.isfile('/persist/dhparams.pem'):
         all_log("don't see dhparams.pem, will generate new one: this may take long time...", True)
         shellrun('cd /persist && openssl dhparam -out dhparams.pem 2048')
+        if os.path.isfile('/persist/dhparams.pem'):
+            all_log("created dhparams.pem, looks good", True)
+        else 
+            all_log("dhparams.pem does not exists, fail", True)
 
 
     if os.path.isfile(CONF_BODY_PATH + 'tls1_0.legacy'): 
@@ -164,7 +168,7 @@ def read_conf_dir(path):
     conf_list = os.listdir(path)
     
     # filter out files that does not contain dots, except in .conf  
-    conf_regex = re.compile('[\\w\\.]+\\.\\w+\\.conf')
+    conf_regex = re.compile('[\\-\\w\\.]+\\.[\\w\\-]+\\.conf')
 
     conf_list = filter(conf_regex.match, conf_list)
     conf_list = map(lambda x: x[:-5], conf_list)
