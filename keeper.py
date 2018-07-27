@@ -33,6 +33,7 @@ NGINX_ROOT_CONF = '/etc/nginx/nginx.conf'
 WELL_KNOWN_ACME = '/etc/nginx/acme'
 
 # actual-factual key and crt
+NGINX_DH_PARAMS = '/persist/dhparams.pem'
 NGINX_KEY = '/persist/nginx/all.key'
 NGINX_CRT = '/persist/nginx/all.crt'
 
@@ -61,15 +62,32 @@ def all_log(string, flush=False):
     file_log(string)
     stderr_log(string, flush)
 
-def ssl_config():
-    if not os.path.isfile('/persist/dhparams.pem'):
+
+def generate_dhparams(production): 
+    # to speedup, we generate 8-bit dhparams when doing configtest 
+    bits = 2048 if production else 8
+    
+    if not os.path.isfile(NGINX_DH_PARAMS):
         all_log("don't see dhparams.pem, will generate new one: this may take long time...", True)
-        shellrun('cd /persist && openssl dhparam -out dhparams.pem 2048')
-        if os.path.isfile('/persist/dhparams.pem'):
+        shellrun('cd /persist && openssl dhparam -out dhparams.pem ' + str(bits))
+        if os.path.isfile(NGINX_DH_PARAMS):
             all_log("created dhparams.pem, looks good", True)
         else: 
             all_log("dhparams.pem does not exists, fail", True)
+            sys.exit(1)  
+    
+    # let's check that our dhparams file is not 8-bit size 
+    if production: 
+        size = os.path.getsize(NGINX_DH_PARAMS)
+        proper_dhparam_size = 350 
+        if size < proper_dhparam_size: 
+            all_log("dhparams seems to be too small, let's regenerate")
+            os.remove(NGINX_DH_PARAMS)
+            generate_dhparams(True)
 
+
+def ssl_config(production):
+    generate_dhparams(production)
 
     if os.path.isfile(CONF_BODY_PATH + 'tls1_0.legacy'): 
         return textwrap.dedent(
@@ -198,14 +216,14 @@ def edit_root_config():
         conf.close() 
 
 
-def gen_config():
+def gen_config(production=True):
     edit_root_config() 
 
     # clean older configs
     shutil.rmtree(NGINX_CONF, ignore_errors=True)
     os.mkdir(NGINX_CONF)
 
-    write_file(NGINX_CONF + '/ssl.conf', ssl_config())
+    write_file(NGINX_CONF + '/ssl.conf', ssl_config(production))
     write_file(NGINX_CONF + '/_nginx-http.conf', read_file(CONF_BODY_PATH + '/_nginx-http.conf'))
 
 
@@ -291,6 +309,15 @@ def acme_install(domains):
     result = shellrun(args) 
     return result.returncode 
 
+def config_preflight(production=True): 
+    all_log("started")
+    domains = gen_config(production)
+    if domains is None or len(domains) == 0: 
+        all_log("Cannot find any conf.body domains\n")
+        sys.exit(1)
+        return 0
+
+
 def nginx_start():
     pid = read_file('/var/run/nginx.pid', '-1')
     cmdline = read_file('/proc/'+pid+'/cmdline')
@@ -300,6 +327,7 @@ def nginx_start():
         nginx_restart()
 
 def nginx_configtest():
+    config_preflight(False)
     result = shellrun('nginx -t')
     return result.returncode
 
@@ -319,16 +347,12 @@ def cron_4hour():
         nginx_restart()
 
 
-def main(argv): 
-    all_log("started")
-    domains = gen_config()
-    if domains is None: 
-        sys.stderr.write("Cannot find any conf.body domains\n")
-        sys.exit(1)
-        return 0
+def main(argv):
 
     if len(argv) > 1 and argv[1] == 'configtest':
         sys.exit(nginx_configtest())
+
+    config_preflight()
 
     nginx_start()
 
