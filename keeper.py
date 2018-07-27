@@ -32,8 +32,10 @@ NGINX_ROOT_CONF = '/etc/nginx/nginx.conf'
 # for letsencrypt verification
 WELL_KNOWN_ACME = '/etc/nginx/acme'
 
-# actual-factual key and crt
+# dhparam file 
 NGINX_DH_PARAMS = '/persist/dhparams.pem'
+
+# actual-factual key and crt
 NGINX_KEY = '/persist/nginx/all.key'
 NGINX_CRT = '/persist/nginx/all.crt'
 
@@ -316,6 +318,7 @@ def config_preflight(production=True):
         all_log("Cannot find any conf.body domains\n")
         sys.exit(1)
         return 0
+    return domains 
 
 
 def nginx_start():
@@ -352,7 +355,7 @@ def main(argv):
     if len(argv) > 1 and argv[1] == 'configtest':
         sys.exit(nginx_configtest())
 
-    config_preflight()
+    domains = config_preflight()
 
     nginx_start()
 
