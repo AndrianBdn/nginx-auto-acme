@@ -99,7 +99,6 @@ def ssl_config(production):
         ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
         ssl_prefer_server_ciphers on;
         ssl_session_cache shared:SSL:60m;
-        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains";
         ssl_stapling on;
         ssl_stapling_verify on;
         resolver 8.8.8.8 8.8.4.4 valid=300s;
@@ -113,7 +112,6 @@ def ssl_config(production):
         ssl_protocols TLSv1.2;
         ssl_prefer_server_ciphers on;
         ssl_session_cache shared:SSL:60m;
-        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains";
         ssl_stapling on;
         ssl_stapling_verify on;
         resolver 8.8.8.8 8.8.4.4 valid=300s;
@@ -151,6 +149,7 @@ def https_config(domain, body):
     server {{
         server_name {domain};
         listen 443 ssl http2;
+        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains";
         ssl_certificate      {crt};
         ssl_certificate_key  {key};
         server_tokens        off;
