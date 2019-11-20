@@ -21,6 +21,8 @@ services:
     nginx:
         image: andrianbdn/nginx-auto-acme 
         restart: unless-stopped
+        environment:
+            - SLACK_CH_URL=none
         ports:
             - "443:443"
             - "80:80"
@@ -36,7 +38,9 @@ services:
 
 **Do not change** 443 and 80 port mappings, otherwise this letsencrypt wont be able to issue TLS certificate. 
 
-First run will take some time to generate dhparams 
+First run will take some time to generate dhparams. 
+
+You can optionally specify SLACK_CH_URL to Incoming Slack WebHook. If some domain could not be resolved, it will be posted in that channel. 
 
 
 ## TLS 1.2 by default  

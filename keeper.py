@@ -7,8 +7,10 @@ import os
 import sys
 import subprocess
 import zlib #for crc32
-import pprint
-import textwrap 
+import textwrap
+import socket
+import json
+import requests
 
 # special file besides regular docker logging
 RENEW_LOG_FILE = "/persist/important.txt"
@@ -48,6 +50,9 @@ LAST_DOMAINS_FILE = '/persist/last-domains.txt'
 # timestamp for cron-like stuff
 LAST_TIME_FILE = '/persist/last-time.txt'
 
+# last slack channel 
+LAST_SLACK_CH_URL = '/persist/last-slack-ch.txt'
+
 def log_fmt(string):
     return "{} {}\n".format(time.strftime("%c"), string)
 
@@ -63,6 +68,56 @@ def stderr_log(string, flush=False):
 def all_log(string, flush=False):
     file_log(string)
     stderr_log(string, flush)
+
+
+def resolve_ip(hostname):
+    try:
+        data = socket.gethostbyname(hostname)
+        ip_addr = repr(data)
+        return ip_addr.decode("utf-8")
+    except Exception:
+        return False
+
+
+def discover_my_ip():
+    ip_services = ["https://ifconfig.co/ip", "https://api.ipify.org/", "http://whatismyip.akamai.com/"]
+
+    for ip_service in ip_services:
+        try:
+            response = requests.get(url=ip_service)
+            if response.status_code == 200:
+                return response.content
+        except requests.exceptions.RequestException:
+            print('HTTP Request failed to {}'.format(ip_service))
+
+    return "unknown"
+
+def slack_url():
+    return os.getenv('SLACK_CH_URL', '')
+
+def slack(text):
+    all_log("!! Posting to Slack {} message {}".format(slack_url(), text))
+
+    if slack_url().find("https://") == -1:
+        all_log("no valid slack url")
+        return 
+
+    full_text = "nginx-auto-acme from {} : {}".format(discover_my_ip(), text)
+
+    try:
+        response = requests.post(
+            url=slack_url(),
+            headers={
+                "Content-Type": "application/json; charset=utf-8",
+            },
+            data=json.dumps({
+                "text": full_text
+            })
+        )
+        all_log('Slack response HTTP Status Code: {status_code}'.format(status_code=response.status_code))
+        all_log('Slack response HTTP Response Body: {content}'.format(content=response.content))
+    except requests.exceptions.RequestException:
+        all_log('Slack HTTP Request Failed')
 
 
 def generate_dhparams(production): 
@@ -104,8 +159,8 @@ def ssl_config(production):
         resolver 8.8.8.8 8.8.4.4 valid=300s;
         resolver_timeout 5s;
         """)
-    else:
-        return textwrap.dedent(
+    
+    return textwrap.dedent(
         """
         ssl_ciphers 'ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256';
         ssl_dhparam /persist/dhparams.pem;
@@ -200,25 +255,25 @@ def edit_root_config():
 
     lines = [line.rstrip('\n') for line in open(NGINX_ROOT_CONF)]
 
-    modified = False 
+    modified = False
     result = ''
-    for line in lines: 
-       for key in keys: 
-            envkey = key.upper() 
-            if envkey in os.environ and line.find(key) != -1: 
-                modified = True 
+    for line in lines:
+        for key in keys:
+            envkey = key.upper()
+            if envkey in os.environ and line.find(key) != -1:
+                modified = True
                 result = result + key + " " + os.environ[envkey] + ";\n"
-            else: 
+            else:
                 result = result + line + "\n"
 
-    if modified: 
+    if modified:
         conf = open(NGINX_ROOT_CONF, 'w')
         conf.write(result)
-        conf.close() 
+        conf.close()
 
 
 def gen_config(production=True):
-    edit_root_config() 
+    edit_root_config()
 
     # clean older configs
     shutil.rmtree(NGINX_CONF, ignore_errors=True)
@@ -227,11 +282,36 @@ def gen_config(production=True):
     write_file(NGINX_CONF + '/ssl.conf', ssl_config(production))
     write_file(NGINX_CONF + '/_nginx-http.conf', read_file(CONF_BODY_PATH + '/_nginx-http.conf'))
 
+    nginx_default = textwrap.dedent(
+    """
+    server {
+        server_name _;
+        listen 80 default_server; 
+        server_tokens off;
+        return  444;
+    }
+
+    server {
+        server_name _; 
+        listen 443 ssl http2;
+        server_tokens off;
+        ssl_certificate      /etc/nginx/dummy-cert.pem;
+        ssl_certificate_key  /etc/nginx/dummy-key.pem;
+        return 444; 
+    }
+
+    """)
+
+    write_file(NGINX_CONF + '/_nginx_default.conf', nginx_default)
 
     # read user configs
     domains = read_conf_dir(CONF_BODY_PATH)
 
     for domain in domains:
+        if not resolve_ip(domain):
+            slack("unable to resolve domain {}".format(domain))
+            continue 
+
         new_config = http_config(domain)
 
         if tls_cert_exists():
@@ -310,9 +390,24 @@ def acme_install(domains):
     result = shellrun(args) 
     return result.returncode 
 
+
+def try_slack():
+    old_slack = read_file(LAST_SLACK_CH_URL)
+    if slack_url() != old_slack:
+        slack("slack posting works")
+    write_file(LAST_SLACK_CH_URL, slack_url())
+
+
 def config_preflight(production=True): 
     all_log("started")
+
+    try_slack() 
+
+    if read_file("/etc/nginx/dummy-cert.pem") == "": 
+        shellrun("cd /etc/nginx && openssl req -x509 -newkey rsa:4096 -keyout dummy-key.pem -out dummy-cert.pem -days 3650 -nodes -subj '/CN=localhost'")
+
     domains = gen_config(production)
+
     if domains is None or len(domains) == 0: 
         all_log("Cannot find any conf.body domains\n")
         sys.exit(1)
@@ -337,8 +432,12 @@ def nginx_restart():
     shellrun('nginx -s reload')
 
 
-def cron_4hour():
+def cron_4hour(domains):
     all_log('running 24h renewal check')
+
+    for domain in domains:
+        if not resolve_ip(domain):
+            slack("unable to resolve domain {}".format(domain))
 
     before_renew = tls_cert_hash()
     shellrun([ACME_SH, '--cron', '--home /root/.acme.sh/'])
@@ -364,7 +463,7 @@ def main(argv):
         gen_config()
         nginx_restart()
     else:
-        cron_4hour()
+        cron_4hour(domains)
 
     hour_4 = 14400
     hour_24 = 86400
@@ -373,7 +472,7 @@ def main(argv):
         old_time = float(read_file(LAST_TIME_FILE, '0'))
         timestamp = time.time()
         if timestamp - old_time >= hour_24:
-            cron_4hour()
+            cron_4hour(domains)
             write_file(LAST_TIME_FILE, str(timestamp))
 
     return 0
