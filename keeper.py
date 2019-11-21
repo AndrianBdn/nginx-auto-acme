@@ -71,12 +71,14 @@ def all_log(string, flush=False):
     stderr_log(string, flush)
 
 
-def resolve_ip(hostname):
+def resolve_ip(hostname, retry=True):
     try:
         data = socket.gethostbyname(hostname)
         ip_addr = repr(data)
         return ip_addr.decode("utf-8")
     except Exception:
+        if retry:
+            return resolve_ip(hostname, retry=False)
         return False
 
 
@@ -89,7 +91,7 @@ def discover_my_ip():
         try:
             response = requests.get(url=ip_service)
             if response.status_code == 200:
-                return response.content
+                return response.content.decode("utf-8")
         except requests.exceptions.RequestException:
             print('HTTP Request failed to {}'.format(ip_service))
 
@@ -286,24 +288,22 @@ def gen_config(production=True):
     write_file(NGINX_CONF + '/_nginx-http.conf', read_file(CONF_BODY_PATH + '/_nginx-http.conf'))
 
     nginx_default = textwrap.dedent(
-    """
-    server {
-        server_name _;
-        listen 80 default_server;
-        server_tokens off;
-        return  444;
-    }
+        """
+        server {
+            server_name _;
+            listen 80 default_server;
+            server_tokens off;
+            return  444;
+        }
 
-    server {
-        server_name _;
-        listen 443 ssl http2;
-        server_tokens off;
-        ssl_certificate      /etc/nginx/dummy-cert.pem;
-        ssl_certificate_key  /etc/nginx/dummy-key.pem;
-        return 444;
-    }
-
-    """)
+        server {
+            server_name _;
+            listen 443 ssl http2;
+            server_tokens off;
+            ssl_certificate      /etc/nginx/dummy-cert.pem;
+            ssl_certificate_key  /etc/nginx/dummy-key.pem;
+            return 444;
+        }""")
 
     write_file(NGINX_CONF + '/_nginx_default.conf', nginx_default)
 
