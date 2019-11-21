@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import time
+import datetime
 import shutil
 import re
 import os
@@ -34,7 +35,7 @@ NGINX_ROOT_CONF = '/etc/nginx/nginx.conf'
 # for letsencrypt verification
 WELL_KNOWN_ACME = '/etc/nginx/acme'
 
-# dhparam file 
+# dhparam file
 NGINX_DH_PARAMS = '/persist/dhparams.pem'
 
 # actual-factual key and crt
@@ -50,7 +51,7 @@ LAST_DOMAINS_FILE = '/persist/last-domains.txt'
 # timestamp for cron-like stuff
 LAST_TIME_FILE = '/persist/last-time.txt'
 
-# last slack channel 
+# last slack channel
 LAST_SLACK_CH_URL = '/persist/last-slack-ch.txt'
 
 def log_fmt(string):
@@ -62,8 +63,8 @@ def file_log(string):
 
 def stderr_log(string, flush=False):
     sys.stderr.write(log_fmt(string))
-    if flush: 
-        sys.stderr.flush() 
+    if flush:
+        sys.stderr.flush()
 
 def all_log(string, flush=False):
     file_log(string)
@@ -80,7 +81,9 @@ def resolve_ip(hostname):
 
 
 def discover_my_ip():
-    ip_services = ["https://ifconfig.co/ip", "https://api.ipify.org/", "http://whatismyip.akamai.com/"]
+    ip_services = ["https://ifconfig.co/ip",
+                   "https://api.ipify.org/",
+                   "http://whatismyip.akamai.com/"]
 
     for ip_service in ip_services:
         try:
@@ -100,7 +103,7 @@ def slack(text):
 
     if slack_url().find("https://") == -1:
         all_log("no valid slack url")
-        return 
+        return
 
     full_text = "nginx-auto-acme from {} : {}".format(discover_my_ip(), text)
 
@@ -120,24 +123,24 @@ def slack(text):
         all_log('Slack HTTP Request Failed')
 
 
-def generate_dhparams(production): 
-    # to speedup, we generate 8-bit dhparams when doing configtest 
+def generate_dhparams(production):
+    # to speedup, we generate 8-bit dhparams when doing configtest
     bits = 2048 if production else 8
-    
+
     if not os.path.isfile(NGINX_DH_PARAMS):
         all_log("don't see dhparams.pem, will generate new one: this may take long time...", True)
         shellrun('cd /persist && openssl dhparam -out dhparams.pem ' + str(bits))
         if os.path.isfile(NGINX_DH_PARAMS):
             all_log("created dhparams.pem, looks good", True)
-        else: 
+        else:
             all_log("dhparams.pem does not exists, fail", True)
-            sys.exit(1)  
-    
-    # let's check that our dhparams file is not 8-bit size 
-    if production: 
+            sys.exit(1)
+
+    # let's check that our dhparams file is not 8-bit size
+    if production:
         size = os.path.getsize(NGINX_DH_PARAMS)
-        proper_dhparam_size = 350 
-        if size < proper_dhparam_size: 
+        proper_dhparam_size = 350
+        if size < proper_dhparam_size:
             all_log("dhparams seems to be too small, let's regenerate")
             os.remove(NGINX_DH_PARAMS)
             generate_dhparams(True)
@@ -146,20 +149,20 @@ def generate_dhparams(production):
 def ssl_config(production):
     generate_dhparams(production)
 
-    if os.path.isfile(CONF_BODY_PATH + 'tls1_0.legacy'): 
+    if os.path.isfile(CONF_BODY_PATH + 'tls1_0.legacy'):
         return textwrap.dedent(
-        """
-        ssl_ciphers "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK";
-        ssl_dhparam /persist/dhparams.pem;
-        ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
-        ssl_prefer_server_ciphers on;
-        ssl_session_cache shared:SSL:60m;
-        ssl_stapling on;
-        ssl_stapling_verify on;
-        resolver 8.8.8.8 8.8.4.4 valid=300s;
-        resolver_timeout 5s;
-        """)
-    
+            """
+            ssl_ciphers "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK";
+            ssl_dhparam /persist/dhparams.pem;
+            ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+            ssl_prefer_server_ciphers on;
+            ssl_session_cache shared:SSL:60m;
+            ssl_stapling on;
+            ssl_stapling_verify on;
+            resolver 8.8.8.8 8.8.4.4 valid=300s;
+            resolver_timeout 5s;
+            """)
+
     return textwrap.dedent(
         """
         ssl_ciphers 'ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256';
@@ -176,41 +179,41 @@ def ssl_config(production):
 
 def http_config(domain):
     template = textwrap.dedent(
-    """
-    server {{
-        server_name {domain};
-        listen 80; 
-        server_tokens off;
+        """
+        server {{
+            server_name {domain};
+            listen 80;
+            server_tokens off;
 
-        location /.well-known/acme-challenge/ {{
-            root {acmeroot};
-            try_files $uri =404;
+            location /.well-known/acme-challenge/ {{
+                root {acmeroot};
+                try_files $uri =404;
+            }}
+            location / {{
+                rewrite ^.+$ https://{domain} permanent;
+            }}
         }}
-        location / {{
-            rewrite ^.+$ https://{domain} permanent;
-        }}
-    }}
-    """)
+        """)
 
     return template.format(domain=domain, acmeroot=WELL_KNOWN_ACME)
 
 def https_config(domain, body):
 
     if re.search(r'server\s+{', body) is not None:
-        return None 
+        return None
 
     template = textwrap.dedent(
-    """
-    server {{
-        server_name {domain};
-        listen 443 ssl http2;
-        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains";
-        ssl_certificate      {crt};
-        ssl_certificate_key  {key};
-        server_tokens        off;
-        {body}
-    }}
-    """)
+        """
+        server {{
+            server_name {domain};
+            listen 443 ssl http2;
+            add_header Strict-Transport-Security "max-age=63072000; includeSubDomains";
+            ssl_certificate      {crt};
+            ssl_certificate_key  {key};
+            server_tokens        off;
+            {body}
+        }}
+        """)
     return template.format(domain=domain, body=body, key=NGINX_KEY, crt=NGINX_CRT)
 
 
@@ -218,7 +221,7 @@ def tls_cert_exists():
     return read_file(NGINX_CRT).find('BEGIN CERTIFICATE') > -1 and read_file(NGINX_KEY).find('BEGIN RSA PRIVATE KEY') > -1
 
 
-def tls_cert_hash(): 
+def tls_cert_hash():
     return zlib.crc32(read_file(NGINX_CRT).encode("utf8"))
 
 
@@ -242,8 +245,8 @@ def https_config_error(domain):
 
 def read_conf_dir(path):
     conf_list = os.listdir(path)
-    
-    # filter out files that does not contain dots, except in .conf  
+
+    # filter out files that does not contain dots, except in .conf
     conf_regex = re.compile('[\\-\\w\\.]+\\.[\\w\\-]+\\.conf')
 
     conf_list = filter(conf_regex.match, conf_list)
@@ -286,18 +289,18 @@ def gen_config(production=True):
     """
     server {
         server_name _;
-        listen 80 default_server; 
+        listen 80 default_server;
         server_tokens off;
         return  444;
     }
 
     server {
-        server_name _; 
+        server_name _;
         listen 443 ssl http2;
         server_tokens off;
         ssl_certificate      /etc/nginx/dummy-cert.pem;
         ssl_certificate_key  /etc/nginx/dummy-key.pem;
-        return 444; 
+        return 444;
     }
 
     """)
@@ -310,7 +313,7 @@ def gen_config(production=True):
     for domain in domains:
         if not resolve_ip(domain):
             slack("unable to resolve domain {}".format(domain))
-            continue 
+            continue
 
         new_config = http_config(domain)
 
@@ -323,7 +326,7 @@ def gen_config(production=True):
 
         write_file(NGINX_CONF + domain + '.conf', new_config)
 
-    return domains 
+    return domains
 
 def need_reissue(domains):
     if not tls_cert_exists():
@@ -348,20 +351,20 @@ def shellrun(args):
     if isinstance(cmd, list):
         cmd = ' '.join(cmd)
     all_log("calling {}".format(cmd))
-    result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    
+    result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+
     all_log("{}: return code {}".format(result.args, result.returncode))
-    
-    p = lambda n, t: all_log("{}: {} {}".format(result.args, n, textwrap.indent(t.decode('utf-8'), '  ')))
+
+    shellrun_prn = lambda n, t: all_log("{}: {} {}".format(result.args, n, textwrap.indent(t.decode('utf-8'), '  ')))
 
     if len(result.stdout) > 0:
-        p('stdout', result.stdout)
+        shellrun_prn('stdout', result.stdout)
 
     if len(result.stderr) > 0:
-        p('stderr', result.stderr)
+        shellrun_prn('stderr', result.stderr)
 
-    return result 
-    
+    return result
+
 
 def acme_issue(domains):
     shutil.rmtree(ACME_CERTS_PATH, ignore_errors=True)
@@ -387,8 +390,8 @@ def acme_install(domains):
 
     args = [ACME_SH, '--installcert'] + acme_d_args(domains)
     args += ['--fullchainpath', NGINX_CRT, '--keypath', NGINX_KEY]
-    result = shellrun(args) 
-    return result.returncode 
+    result = shellrun(args)
+    return result.returncode
 
 
 def try_slack():
@@ -398,28 +401,28 @@ def try_slack():
     write_file(LAST_SLACK_CH_URL, slack_url())
 
 
-def config_preflight(production=True): 
+def config_preflight(production=True):
     all_log("started")
 
-    try_slack() 
+    try_slack()
 
-    if read_file("/etc/nginx/dummy-cert.pem") == "": 
+    if read_file("/etc/nginx/dummy-cert.pem") == "":
         shellrun("cd /etc/nginx && openssl req -x509 -newkey rsa:4096 -keyout dummy-key.pem -out dummy-cert.pem -days 3650 -nodes -subj '/CN=localhost'")
 
     domains = gen_config(production)
 
-    if domains is None or len(domains) == 0: 
+    if domains is None or len(domains) == 0:
         all_log("Cannot find any conf.body domains\n")
         sys.exit(1)
         return 0
-    return domains 
+    return domains
 
 
 def nginx_start():
     pid = read_file('/var/run/nginx.pid', '-1')
     cmdline = read_file('/proc/'+pid+'/cmdline')
     if cmdline.find('nginx') == -1:
-        subprocess.run('nginx', shell=True)
+        subprocess.run('nginx', shell=True, check=False)
     else:
         nginx_restart()
 
@@ -433,7 +436,7 @@ def nginx_restart():
 
 
 def cron_4hour(domains):
-    all_log('running 24h renewal check')
+    all_log('running 4h renewal check')
 
     for domain in domains:
         if not resolve_ip(domain):
@@ -441,11 +444,31 @@ def cron_4hour(domains):
 
     before_renew = tls_cert_hash()
     shellrun([ACME_SH, '--cron', '--home /root/.acme.sh/'])
-    after_renew = tls_cert_hash() 
+    after_renew = tls_cert_hash()
 
     if before_renew != after_renew:
         all_log("cert hash differs, reloading nginx")
         nginx_restart()
+
+    # check expiration
+
+    shellrun("openssl x509 -noout -enddate -in {nginx_crt} > {nginx_crt}.expire".format(nginx_crt=NGINX_CRT))
+
+    expire = read_file(NGINX_CRT + ".expire")
+    if expire == "":
+        slack("can't get certificate expiration")
+    else:
+        expire = expire.strip().replace("notAfter=", "")
+        try:
+            expire_date = datetime.datetime.strptime(expire, "%b %d %H:%M:%S %Y %Z")
+        except ValueError:
+            slack("can't parse certificate expiration date {}".format(expire))
+            return
+
+        diff = expire_date - datetime.datetime.today()
+
+        if diff.days < 7:
+            slack("certificate is going to expire in {} days".format(diff.days))
 
 
 def main(argv):
