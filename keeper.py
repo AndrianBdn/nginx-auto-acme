@@ -9,9 +9,9 @@ import sys
 import subprocess
 import zlib #for crc32
 import textwrap
-import socket
 import json
 import requests
+import dns.resolver
 
 # special file besides regular docker logging
 RENEW_LOG_FILE = "/persist/important.txt"
@@ -54,6 +54,7 @@ LAST_TIME_FILE = '/persist/last-time.txt'
 # last slack channel
 LAST_SLACK_CH_URL = '/persist/last-slack-ch.txt'
 
+
 def log_fmt(string):
     return "{} {}\n".format(time.strftime("%c"), string)
 
@@ -71,15 +72,18 @@ def all_log(string, flush=False):
     stderr_log(string, flush)
 
 
-def resolve_ip(hostname, retry=True):
+def resolve_ip(hostname):
+    my_resolver = dns.resolver.Resolver()
+    my_resolver.nameservers = ['8.8.8.8', '1.1.1.1']
+
     try:
-        data = socket.gethostbyname(hostname)
-        ip_addr = repr(data)
-        return ip_addr.decode("utf-8")
-    except Exception:
-        if retry:
-            return resolve_ip(hostname, retry=False)
-        return False
+        dns_results = my_resolver.query(hostname)
+        dns_records = [ip.address for ip in dns_results]
+        return len(dns_records) > 0
+    except dns.resolver.NXDOMAIN:
+        return False 
+    except dns.resolver.NoAnswer:
+        return False 
 
 
 def discover_my_ip():
@@ -91,7 +95,7 @@ def discover_my_ip():
         try:
             response = requests.get(url=ip_service)
             if response.status_code == 200:
-                return response.content.decode("utf-8")
+                return response.content.decode("utf-8").strip() 
         except requests.exceptions.RequestException:
             print('HTTP Request failed to {}'.format(ip_service))
 
