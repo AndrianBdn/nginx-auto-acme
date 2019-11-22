@@ -11,7 +11,6 @@ import zlib #for crc32
 import textwrap
 import json
 import requests
-import dns.resolver
 
 # special file besides regular docker logging
 RENEW_LOG_FILE = "/persist/important.txt"
@@ -72,18 +71,27 @@ def all_log(string, flush=False):
     stderr_log(string, flush)
 
 
-def resolve_ip(hostname):
-    my_resolver = dns.resolver.Resolver()
-    my_resolver.nameservers = ['8.8.8.8', '1.1.1.1']
+def resolve_ip(hostname, retry=True):
+    # using dns over https 
+    endpoint = "https://cloudflare-dns.com/dns-query?name={}&type=A".format(hostname)
 
     try:
-        dns_results = my_resolver.query(hostname)
-        dns_records = [ip.address for ip in dns_results]
-        return len(dns_records) > 0
-    except dns.resolver.NXDOMAIN:
+        response = requests.get(
+            url=endpoint,
+            headers={"accept" : "application/dns-json"}
+        )
+        if response.status_code == 200:
+            jresp = response.json() 
+            if "Answer" in jresp: 
+                answer = jresp["Answer"]
+                if len(answer) > 0:
+                    return True 
+            
         return False 
-    except dns.resolver.NoAnswer:
-        return False 
+    except (json.decoder.JSONDecodeError, requests.exceptions.RequestException) as e:
+        all_log('DNS-over-https request failed: {}'.format(e))
+        if retry: 
+            return resolve_ip(hostname, False)
 
 
 def discover_my_ip():
