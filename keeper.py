@@ -381,7 +381,9 @@ def shellrun(args):
 def acme_issue(domains):
     shutil.rmtree(ACME_CERTS_PATH, ignore_errors=True)
 
-    args = [ACME_SH, '--issue'] + acme_d_args(domains) + ['-w', WELL_KNOWN_ACME]
+    args = [ACME_SH, '--issue'] + acme_d_args(domains) + ['-w', WELL_KNOWN_ACME] 
+    args += ['--server', 'letsencrypt']
+
     if os.path.isfile(ACME_ACCOUNT_PERSIST):
         shutil.copy(ACME_ACCOUNT_PERSIST, ACME_ACCOUNT_CONF)
 
@@ -402,6 +404,8 @@ def acme_install(domains):
 
     args = [ACME_SH, '--installcert'] + acme_d_args(domains)
     args += ['--fullchainpath', NGINX_CRT, '--keypath', NGINX_KEY]
+    args += ['--server', 'letsencrypt']
+
     result = shellrun(args)
     return result.returncode
 
