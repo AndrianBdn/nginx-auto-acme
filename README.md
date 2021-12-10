@@ -43,7 +43,7 @@ First run will take some time to generate dhparams.
 You can optionally specify SLACK_CH_URL to Incoming Slack WebHook. If some domain could not be resolved, it will be posted in that channel. 
 
 
-## TLS 1.2 by default  
+## TLS 1.2 and 1.3 by default  
 
 Read README.md in conf.body folder to enable older TLS.
 

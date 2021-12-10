@@ -4,6 +4,9 @@ NAME = andrianbdn/nginx-auto-acme
 
 .PHONY: image img hub all
 
+imagex64:
+	docker build --platform linux/amd64 -t $(NAME) --pull .
+
 img:
 	docker build -t $(NAME) .
 
