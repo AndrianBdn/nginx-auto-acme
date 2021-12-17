@@ -268,7 +268,7 @@ def read_conf_dir(path):
     return sorted(conf_list)
 
 def edit_root_config():
-    keys = ['worker_processes']
+    keys = ['worker_processes', 'worker_connections', 'keepalive_timeout']
 
     lines = [line.rstrip('\n') for line in open(NGINX_ROOT_CONF)]
 
