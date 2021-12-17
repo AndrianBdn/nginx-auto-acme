@@ -275,13 +275,13 @@ def edit_root_config():
     modified = False
     result = ''
     for line in lines:
+        newline = line + "\n"
         for key in keys:
             envkey = key.upper()
             if envkey in os.environ and line.find(key) != -1:
                 modified = True
-                result = result + key + " " + os.environ[envkey] + ";\n"
-            else:
-                result = result + line + "\n"
+                newline = key + " " + os.environ[envkey] + ";\n"    
+        result = result + newline
 
     if modified:
         conf = open(NGINX_ROOT_CONF, 'w')

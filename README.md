@@ -44,7 +44,7 @@ You can optionally specify SLACK_CH_URL to Incoming Slack WebHook. If some domai
 
 ### Additional environment variables 
 
-During the start, container sets worker_processes, worker_connections, keepalive_timeout nginx root config values to environment variables with the same name. 
+During the start, container sets worker_processes, worker_connections, keepalive_timeout nginx root config values to environment variables with the same name, in uppercase (WORKER_PROCESSES, WORKER_CONNECTIONS, KEEPALIVE_TIMEOUT)
 
 
 ## TLS 1.2 and 1.3 by default  
