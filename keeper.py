@@ -489,8 +489,15 @@ def cron_4hour(domains):
 
 def main(argv):
 
+    configtest = nginx_configtest()
+
     if len(argv) > 1 and argv[1] == 'configtest':
-        sys.exit(nginx_configtest())
+        sys.exit(configtest)
+
+
+    if configtest != 0:
+        all_log("nginx configtest returned non-zero code")
+        sys.exit(configtest)
 
     domains = config_preflight()
 
