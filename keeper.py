@@ -274,14 +274,20 @@ def edit_root_config():
 
     modified = False
     result = ''
+
     for line in lines:
         newline = line + "\n"
         for key in keys:
             envkey = key.upper()
             if envkey in os.environ and line.find(key) != -1:
                 modified = True
-                newline = key + " " + os.environ[envkey] + ";\n"    
+                newline = key + " " + os.environ[envkey] + ";\n"
+
         result = result + newline
+
+    if "GEOIP_MODULE" in os.environ and result.find('ngx_http_geoip_module') == -1:
+        mod_line = 'load_module "modules/ngx_http_geoip_module.so";' + "\n"
+        result = result.replace("\nevents {", mod_line + "\nevents {", 1)
 
     if modified:
         conf = open(NGINX_ROOT_CONF, 'w')
