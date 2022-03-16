@@ -137,9 +137,8 @@ def slack(text):
         all_log('Slack HTTP Request Failed')
 
 
-def generate_dhparams(production):
-    # to speedup, we generate 8-bit dhparams when doing configtest
-    bits = 2048 if production else 8
+def generate_dhparams():
+    bits = 2048
 
     if not os.path.isfile(NGINX_DH_PARAMS):
         all_log("don't see dhparams.pem, will generate new one: this may take long time...", True)
@@ -151,17 +150,16 @@ def generate_dhparams(production):
             sys.exit(1)
 
     # let's check that our dhparams file is not 8-bit size
-    if production:
-        size = os.path.getsize(NGINX_DH_PARAMS)
-        proper_dhparam_size = 350
-        if size < proper_dhparam_size:
-            all_log("dhparams seems to be too small, let's regenerate")
-            os.remove(NGINX_DH_PARAMS)
-            generate_dhparams(True)
+    size = os.path.getsize(NGINX_DH_PARAMS)
+    proper_dhparam_size = 350
+    if size < proper_dhparam_size:
+        all_log("dhparams seems to be too small, let's regenerate")
+        os.remove(NGINX_DH_PARAMS)
+        generate_dhparams()
 
 
-def ssl_config(production):
-    generate_dhparams(production)
+def ssl_config():
+    generate_dhparams()
 
     if os.path.isfile(CONF_BODY_PATH + 'tls1_0.legacy'):
         return textwrap.dedent(
@@ -302,7 +300,7 @@ def gen_config(production=True):
     shutil.rmtree(NGINX_CONF, ignore_errors=True)
     os.mkdir(NGINX_CONF)
 
-    write_file(NGINX_CONF + '/ssl.conf', ssl_config(production))
+    write_file(NGINX_CONF + '/ssl.conf', ssl_config())
     write_file(NGINX_CONF + '/_nginx-http.conf', read_file(CONF_BODY_PATH + '/_nginx-http.conf'))
 
     nginx_default = textwrap.dedent(
