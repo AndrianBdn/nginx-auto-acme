@@ -34,6 +34,8 @@ services:
             options:
                 max-size: "10m"
                 max-file: "3"
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
 ```
 
 **Do not change** 443 and 80 port mappings, otherwise this letsencrypt wont be able to issue TLS certificate. 
@@ -41,6 +43,24 @@ services:
 First run will take some time to generate dhparams. 
 
 You can optionally specify SLACK_CH_URL to Incoming Slack WebHook. If some domain could not be resolved, it will be posted in that channel. 
+
+
+### Example nginx proxy config 
+
+Usually I use nginx-auto-acme to proxy requests to other containers, that have their ports mapped to docker host. 
+
+This is an example of a nginx config file (should be put in conf.body, name the same as hostname + conf): 
+
+```
+location / {
+    proxy_pass http://host.docker.internal:8088;
+
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Host      $host;
+}
+```
+
 
 ### Additional environment variables 
 

@@ -14,3 +14,5 @@ services:
             options:
                 max-size: "10m"
                 max-file: "3"
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
