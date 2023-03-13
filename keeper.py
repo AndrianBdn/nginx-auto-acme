@@ -385,7 +385,15 @@ def shellrun(args):
 def acme_issue(domains):
     shutil.rmtree(ACME_CERTS_PATH, ignore_errors=True)
 
-    args = [ACME_SH, '--issue'] + acme_d_args(domains) + ['-w', WELL_KNOWN_ACME] 
+    args = [ACME_SH, '--issue']
+    if 'ACME_DNS' in os.environ:
+        arg = os.environ['ACME_DNS']
+        # sanitized to avoid command line injection
+        arg = re.sub('[^0-9a-zA-Z_]+', '_', arg)
+        args += ['--dns', arg]
+
+
+    args += acme_d_args(domains) + ['-w', WELL_KNOWN_ACME] 
     args += ['--server', 'letsencrypt']
 
     if os.path.isfile(ACME_ACCOUNT_PERSIST):
