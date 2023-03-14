@@ -214,19 +214,27 @@ def https_config(domain, body):
     if re.search(r'server\s+{', body) is not None:
         return None
 
+    sts = """add_header Strict-Transport-Security "max-age=63072000; includeSubDomains";"""
+
+    if body.lower().find("strict-transport-security") > 0:
+        sts = ""
+
+    if body.lower().find("nginx-auto-acme-sts-preload") > 0:
+        sts = """add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload";"""
+
     template = textwrap.dedent(
         """
         server {{
             server_name {domain};
             listen 443 ssl http2;
-            add_header Strict-Transport-Security "max-age=63072000; includeSubDomains";
+            {sts}
             ssl_certificate      {crt};
             ssl_certificate_key  {key};
             server_tokens        off;
             {body}
         }}
         """)
-    return template.format(domain=domain, body=body, key=NGINX_KEY, crt=NGINX_CRT)
+    return template.format(domain=domain, body=body, key=NGINX_KEY, crt=NGINX_CRT, sts=sts)
 
 
 def tls_cert_exists():

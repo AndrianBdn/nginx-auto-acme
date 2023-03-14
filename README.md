@@ -2,7 +2,7 @@
 
 nginx docker container that automatically has good TLS configuration and letsencrypt client. 
 
-The whole promise is similar to Caddy server — you are getting HTTP/2 web server with automatic HTTPS by letsencrypt; but you're getting full power of real nginx. 
+The whole promise is similar to the Caddy server — you are getting HTTP/2 web server with automatic HTTPS by letsencrypt; but you're getting full power of real nginx. 
 
 
 ## Usage 
@@ -70,6 +70,23 @@ During the start, container sets worker_processes, worker_connections, keepalive
 ## TLS 1.2 and 1.3 by default  
 
 Read README.md in conf.body folder to enable older TLS.
+
+## Strict-Transport-Security
+
+nginx-auto-acme automatically adds [strict-transport-security](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Strict-Transport-Security) header.
+
+```
+strict-transport-security: max-age=63072000; includeSubDomains
+```
+
+Mentioning 'strict-transport-security' anywhere inside a nginx-auto-acme config will result the header not being added automatically.
+
+Mentioning 'nginx-auto-acme-sts-preload' anywhere in nginx-auto-acme config will make the STS header contain 'preload' directrive. 
+
+```
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+```
+
 
 
 ## Acknowledgments 
