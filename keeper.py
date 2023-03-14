@@ -325,8 +325,8 @@ def gen_config(production=True):
             server_name _;
             listen 443 ssl http2;
             server_tokens off;
-            ssl_certificate      /etc/nginx/dummy-cert.pem;
-            ssl_certificate_key  /etc/nginx/dummy-key.pem;
+            ssl_certificate      /persist/dummy-cert.pem;
+            ssl_certificate_key  /persist/dummy-key.pem;
             return 444;
         }""")
 
@@ -443,8 +443,8 @@ def config_preflight(production=True):
 
     try_slack()
 
-    if read_file("/etc/nginx/dummy-cert.pem") == "":
-        shellrun("cd /etc/nginx && openssl req -x509 -newkey rsa:4096 -keyout dummy-key.pem -out dummy-cert.pem -days 3650 -nodes -subj '/CN=localhost'")
+    if read_file("/persist/dummy-cert.pem") == "":
+        shellrun("cd /persist && openssl req -x509 -newkey rsa:4096 -keyout dummy-key.pem -out dummy-cert.pem -days 3650 -nodes -subj '/CN=localhost'")
 
     domains = gen_config(production)
 
