@@ -215,11 +215,12 @@ def https_config(domain, body):
         return None
 
     sts = """add_header Strict-Transport-Security "max-age=63072000; includeSubDomains";"""
+    lb = body.lower()
 
-    if body.lower().find("strict-transport-security") > 0:
+    if lb.find("strict-transport-security") > -1:
         sts = ""
 
-    if body.lower().find("nginx-auto-acme-sts-preload") > 0:
+    if lb.find("nginx-auto-acme-sts-preload") > -1:
         sts = """add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload";"""
 
     template = textwrap.dedent(
@@ -238,7 +239,7 @@ def https_config(domain, body):
 
 
 def tls_cert_exists():
-    return read_file(NGINX_CRT).find('BEGIN CERTIFICATE') > -1 and read_file(NGINX_KEY).find('BEGIN RSA PRIVATE KEY') > -1
+    return read_file(NGINX_CRT).find('--BEGIN CERTIFICATE') > -1 and read_file(NGINX_KEY).find('--BEGIN ') > -1
 
 
 def tls_cert_hash():
@@ -450,7 +451,7 @@ def config_preflight(production=True):
     if domains is None or len(domains) == 0:
         all_log("Cannot find any conf.body domains\n")
         sys.exit(1)
-        return 0
+ 
     return domains
 
 
