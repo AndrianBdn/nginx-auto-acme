@@ -1,19 +1,17 @@
 # nginx-auto-acme
 
-nginx docker container that automatically has good TLS configuration and letsencrypt client. 
+nginx docker container that automatically has good* TLS configuration and Let's Encrypt client. 
 
-The whole promise is similar to the Caddy server — you are getting HTTP/2 web server with automatic HTTPS by letsencrypt; but you're getting full power of real nginx. 
+* good means: rated A by [Qualys SSL Server Test](https://www.ssllabs.com/ssltest/) as of July 2023; see [their rating guide](https://github.com/ssllabs/research/wiki/SSL-Server-Rating-Guide)
 
+With nginx-auto-acme you are getting:
+- HTTP/2 web server with automatic HTTPS by [Let's Encrypt](https://letsencrypt.org/)
+- good defaults 
+- the full power of nginx
 
 ## Usage 
 
-Write **bodies of nginx server blocks** to config.body directory. File names should be domains names + '.conf'. 
-
-If you need to define upstream or something else outside of server blocks, put it to file \_nginx-http.conf in config.body directory. 
-
-'persist' directory is used to store letsencrypt key, certs (no need to change anything there)
-
-Run container using docker-compose: 
+You put docker-compose.yml file to some directory on the server: 
 
 ```yaml  
 version: '2'
@@ -38,18 +36,33 @@ services:
             - "host.docker.internal:host-gateway"
 ```
 
-**Do not change** 443 and 80 port mappings, otherwise this letsencrypt wont be able to issue TLS certificate. 
+**Do not change** 443 and 80 port mappings, otherwise this letsencrypt won't be able to issue TLS certificate. 
 
-First run will take some time to generate dhparams. 
+You can optionally specify SLACK_CH_URL to Incoming Slack WebHook. If some domain could not be resolved, the error message will be posted to that channel.
 
-You can optionally specify SLACK_CH_URL to Incoming Slack WebHook. If some domain could not be resolved, it will be posted in that channel. 
+Now you create conf.body directory and put nginx configs there. 
+- You should name them as hostname.conf. For example, if you want to serve example.com, you should create example.com.conf file in conf.body directory.
+- Of course, you should have DNS record for that hostname pointing to your server.
+- The config does not need to contain `server {` blocks or `server_name`/`listen` directives — it all will be added automatically. Just writes parts of nginx config
+that describe what you want to serve.
+
+Now run `docker compose up -d` and you are done.
+
+First time you run it, it will take some time to generate Diffie-Hellman parameters.
+
+### Host config examples 
+
+Remember, to add a hostname, just create hostname.conf file in conf.body. For example.com, that would be example.com.conf. 
+
+#### Below are some examples:
+
+##### Just redirect to another domain (www to non-www or vice versa):
+```
+return 301 https://example.org/;
+```
 
 
-### Example nginx proxy config 
-
-Usually I use nginx-auto-acme to proxy requests to other containers, that have their ports mapped to docker host. 
-
-This is an example of a nginx config file (should be put in conf.body, name the same as hostname + conf): 
+##### This is a basic example of proxing traffic to some other port on the host (golang binary or other published port of a Docker container): 
 
 ```
 location / {
@@ -60,12 +73,33 @@ location / {
     proxy_set_header Host      $host;
 }
 ```
+You can use `host.docker.internal` to refer to the host machine from inside the container. Replace 8088 with the port you want to proxy to.
+
+##### This is an example of serving static files (protected by basic auth):
+
+```
+location / {
+    autoindex on;
+    root /mnt/data-bin/shared;
+        
+    auth_basic           "Protected Area";
+    auth_basic_user_file /etc/nginx/conf.body/htpasswd;
+}
+```
+
+This is the `htpasswd` file, referred in the config above (also put it in conf.body directory): 
+
+```
+admin:{PLAIN}secure-password
+```
+
+Note: nginx discourage using {PLAIN}, because the password will be stored on the server in the plain text. For some cases, this is an acceptable risk.
 
 
 ### Additional environment variables 
 
-During the start, container sets worker_processes, worker_connections, keepalive_timeout nginx root config values to environment variables with the same name, in uppercase (WORKER_PROCESSES, WORKER_CONNECTIONS, KEEPALIVE_TIMEOUT)
-
+During the start, container sets worker_processes, worker_connections, keepalive_timeout nginx root config values to 
+environment variables with the same name, in uppercase (WORKER_PROCESSES, WORKER_CONNECTIONS, KEEPALIVE_TIMEOUT)
 
 ## TLS 1.2 and 1.3 by default  
 
@@ -81,7 +115,7 @@ strict-transport-security: max-age=63072000; includeSubDomains
 
 Mentioning 'strict-transport-security' anywhere inside a nginx-auto-acme config will result the header not being added automatically.
 
-Mentioning 'nginx-auto-acme-sts-preload' anywhere in nginx-auto-acme config will make the STS header contain 'preload' directrive. 
+Mentioning 'nginx-auto-acme-sts-preload' anywhere in nginx-auto-acme config will make the STS header contain 'preload' directive. 
 
 ```
 strict-transport-security: max-age=63072000; includeSubDomains; preload
@@ -91,5 +125,5 @@ strict-transport-security: max-age=63072000; includeSubDomains; preload
 
 ## Acknowledgments 
 
-- [acme.sh](https://github.com/Neilpang/acme.sh) letsencrypt ACME client in pure shell 
+- [acme.sh](https://github.com/Neilpang/acme.sh) Let's Encrypt ACME client in pure shell 
 - [nginx](https://nginx.org)
