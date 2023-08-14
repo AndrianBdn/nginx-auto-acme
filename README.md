@@ -101,6 +101,27 @@ Note: nginx discourage using {PLAIN}, because the password will be stored on the
 During the start, container sets worker_processes, worker_connections, keepalive_timeout nginx root config values to 
 environment variables with the same name, in uppercase (WORKER_PROCESSES, WORKER_CONNECTIONS, KEEPALIVE_TIMEOUT)
 
+
+## Wildcard certificates and DNS mode 
+
+nginx-auto-acme supports wildcard certificates, which would require using DNS challenge.
+
+- Add ACME_DNS variable to docker-compose.yml. Set its value to the acme.sh DNS API you want to use.
+See [acme.sh DNS API](https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_cf). For Cloudflare, it would be `dns_cf`.
+- Add environment variables necessary for acme.sh to modify your DNS zone. For example, if you use Cloudflare, you would need to add `CF_Token`
+
+Example, environment section of docker-compose.yml (for Cloudflare):
+
+```yaml
+    environment:
+      - SLACK_CH_URL=none
+      - ACME_DNS=dns_cf
+      - CF_Token=<replace with cloudflare token, which can edit your zone(s)>
+```
+
+Now inside `conf.body` create file `_wildcard.domain.gtld.conf`. 
+For example, if you want to serve `*.example.com`, you should create `_wildcard.example.com.conf` file in conf.body directory.
+
 ## TLS 1.2 and 1.3 by default  
 
 Read README.md in conf.body folder to enable older TLS.

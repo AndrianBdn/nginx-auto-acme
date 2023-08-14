@@ -12,4 +12,7 @@ hub:
 	docker push $(NAME)
 
 
+hubtest: 
+	docker push $(NAME):testing
+
 all: image hub

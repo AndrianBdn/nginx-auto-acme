@@ -13,6 +13,7 @@ import json
 import urllib.request
 import urllib.error
 import random
+import shlex
 
 
 # this will be replaced as to * in nginx
@@ -274,7 +275,7 @@ def http_config(domain):
                 try_files $uri =404;
             }}
             location / {{
-                rewrite ^.+$ https://{domain} permanent;
+                return 301 https://$host$request_uri;
             }}
         }}
         """)
@@ -459,7 +460,8 @@ def acme_d_args(domains):
     args = []
     for domain in domains:
         args.append('-d')
-        args.append(fs_domain_replace(domain))
+        # quoting wildcard symbol
+        args.append(shlex.quote(fs_domain_replace(domain)))
     return args
 
 
@@ -546,7 +548,7 @@ def config_preflight(production=True):
 
     has_wildcard = any(map(lambda s: s.startswith(FS_WCARD + "."), domains))
 
-    if has_wildcard and acme_dns() is not None:
+    if has_wildcard and acme_dns() is None:
         all_log("You have a config for a wildcard domain (starts with _wildcard); it requires DNS mode (ACME_DNS)\n")
         sys.exit(1)
 
