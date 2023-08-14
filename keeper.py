@@ -7,15 +7,15 @@ import re
 import os
 import sys
 import subprocess
-import zlib #for crc32
+import zlib  # for crc32
 import textwrap
 import json
-import urllib.request 
+import urllib.request
 import urllib.error
-import random 
+import random
 
 
-# this will be replaced as to * in nginx 
+# this will be replaced as to * in nginx
 FS_WCARD = "_wildcard"
 
 # special file besides regular docker logging
@@ -60,32 +60,43 @@ LAST_TIME_FILE = '/persist/last-time.txt'
 LAST_SLACK_CH_URL = '/persist/last-slack-ch.txt'
 
 
-
 def log_fmt(string):
     return "{} {}\n".format(time.strftime("%c"), string)
+
 
 def file_log(string):
     with open(RENEW_LOG_FILE, "a") as file:
         file.write(log_fmt(string))
+
 
 def stderr_log(string, flush=False):
     sys.stderr.write(log_fmt(string))
     if flush:
         sys.stderr.flush()
 
+
 def all_log(string, flush=False):
     file_log(string)
     stderr_log(string, flush)
 
 
-def resolve_ip(hostname, retry=True):
-    endpoint = "https://cloudflare-dns.com/dns-query?name={}&type=A".format(hostname)
+def resolve_ip(hostname, retry=3):
+
+    endpoints = [
+        "https://one.one.one.one/dns-query?name={}&type=A",
+        "https://dns.google/resolve?name={}&type=A"
+    ]
+
+    endpoint = random.choice(endpoints).format(hostname)
+
     headers = {
         "accept": "application/dns-json"
     }
 
+    stderr_log("querying DoH endpoint " + endpoint)
+
     req = urllib.request.Request(endpoint, headers=headers)
-    
+
     try:
         with urllib.request.urlopen(req) as response:
             if response.status == 200:
@@ -95,16 +106,21 @@ def resolve_ip(hostname, retry=True):
                     answer = jresp["Answer"]
                     if len(answer) > 0:
                         return True
+                return False
+
+        if retry > 0:
+            return resolve_ip(hostname, retry-1)
 
         return False
 
     except (json.JSONDecodeError, urllib.error.URLError) as e:
         all_log('DNS-over-https request failed: {}'.format(e))
-        if retry:
-            return resolve_ip(hostname, False)
+        if retry > 0:
+            return resolve_ip(hostname, retry - 1)
 
 
 cached_ip = None
+
 
 def discover_my_ip():
     global cached_ip
@@ -155,6 +171,7 @@ def acme_dns():
 def slack_url():
     return os.getenv('SLACK_CH_URL', '')
 
+
 def slack(text):
     all_log("!! Posting to Slack {} message {}".format(slack_url(), text))
 
@@ -168,7 +185,7 @@ def slack(text):
         data = json.dumps({
             "text": full_text
         }).encode("utf-8")
-        
+
         request = urllib.request.Request(
             slack_url(),
             data=data,
@@ -178,8 +195,10 @@ def slack(text):
             method="POST"
         )
         with urllib.request.urlopen(request) as response:
-            all_log('Slack response HTTP Status Code: {status_code}'.format(status_code=response.status))
-            all_log('Slack response HTTP Response Body: {content}'.format(content=response.read()))
+            all_log('Slack response HTTP Status Code: {status_code}'.format(
+                status_code=response.status))
+            all_log('Slack response HTTP Response Body: {content}'.format(
+                content=response.read()))
 
     except urllib.error.URLError:
         all_log('Slack HTTP Request Failed')
@@ -188,11 +207,13 @@ def slack(text):
 def fs_domain_replace(fs_domain):
     return fs_domain.replace(FS_WCARD+".", "*.")
 
+
 def generate_dhparams():
     bits = 2048
 
     if not os.path.isfile(NGINX_DH_PARAMS):
-        all_log("don't see dhparams.pem, will generate new one: this may take long time...", True)
+        all_log(
+            "don't see dhparams.pem, will generate new one: this may take long time...", True)
         shellrun('cd /persist && openssl dhparam -out dhparams.pem ' + str(bits))
         if os.path.isfile(NGINX_DH_PARAMS):
             all_log("created dhparams.pem, looks good", True)
@@ -260,9 +281,11 @@ def http_config(domain):
 
     return template.format(domain=fs_domain_replace(domain), acmeroot=WELL_KNOWN_ACME)
 
+
 def https_config(domain, body):
     if re.search(r'server\s+{', body) is not None:
-        all_log("server blocks are not allowed, but found in " + domain + " config", True)
+        all_log("server blocks are not allowed, but found in " +
+                domain + " config", True)
         return None
 
     sts = """add_header Strict-Transport-Security "max-age=63072000; includeSubDomains";"""
@@ -305,20 +328,22 @@ def read_file(path, fallback=''):
     with open(path, 'r') as file:
         return file.read()
 
+
 def write_file(path, body):
     with open(path, 'w') as file:
         file.write(body)
 
 
 def https_config_error(domain):
-    sys.stderr.write("Error: config for " + domain + " should not contain server block\n")
+    sys.stderr.write("Error: config for " + domain +
+                     " should not contain server block\n")
     sys.stderr.write("This is not regular nginx config\n")
     sys.exit(1)
 
 
 def match_config(name):
     # filter out files that does not contain dots, except in .conf
-    # allow _wildcard. @ start 
+    # allow _wildcard. @ start
     return re.compile('(?:_wildcard\\.)?[\\-a-z0-9\\.]+\\.[a-z0-9\\-]+\\.conf$').match(name)
 
 
@@ -328,6 +353,7 @@ def read_conf_dir(path):
     conf_list = filter(match_config, conf_list)
     conf_list = map(lambda x: x[:-5], conf_list)
     return sorted(conf_list)
+
 
 def edit_root_config():
     keys = ['worker_processes', 'worker_connections', 'keepalive_timeout']
@@ -365,7 +391,8 @@ def gen_config(production=True):
     os.mkdir(NGINX_CONF)
 
     write_file(NGINX_CONF + '/ssl.conf', ssl_config())
-    write_file(NGINX_CONF + '/_nginx-http.conf', read_file(CONF_BODY_PATH + '/_nginx-http.conf'))
+    write_file(NGINX_CONF + '/_nginx-http.conf',
+               read_file(CONF_BODY_PATH + '/_nginx-http.conf'))
 
     nginx_default = textwrap.dedent(
         """
@@ -391,10 +418,10 @@ def gen_config(production=True):
     domains = read_conf_dir(CONF_BODY_PATH)
 
     for domain in domains:
-        dns_check = domain 
+        dns_check = domain
 
         if domain.startswith("_wildcard."):
-            rnd = str(random.randint(1, 9999))
+            rnd = str(random.randint(1, 99999))
             dns_check = domain.replace(FS_WCARD+".", "wildcard-check-"+rnd+".")
 
         if not resolve_ip(dns_check):
@@ -414,6 +441,7 @@ def gen_config(production=True):
 
     return domains
 
+
 def need_reissue(domains):
     if not tls_cert_exists():
         return True
@@ -422,8 +450,10 @@ def need_reissue(domains):
         old_domains = read_file(LAST_DOMAINS_FILE).strip().split(' ')
     return domains != old_domains
 
+
 def set_issued(domains):
     write_file(LAST_DOMAINS_FILE, ' '.join(domains))
+
 
 def acme_d_args(domains):
     args = []
@@ -438,11 +468,13 @@ def shellrun(args):
     if isinstance(cmd, list):
         cmd = ' '.join(cmd)
     all_log("calling {}".format(cmd))
-    result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    result = subprocess.run(
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
 
     all_log("{}: return code {}".format(result.args, result.returncode))
 
-    shellrun_prn = lambda n, t: all_log("{}: {} {}".format(result.args, n, textwrap.indent(t.decode('utf-8'), '  ')))
+    def shellrun_prn(n, t): return all_log("{}: {} {}".format(
+        result.args, n, textwrap.indent(t.decode('utf-8'), '  ')))
 
     if len(result.stdout) > 0:
         shellrun_prn('stdout', result.stdout)
@@ -461,7 +493,7 @@ def acme_issue(domains):
     if dns_arg is not None:
         args += ['--dns', dns_arg]
 
-    args += acme_d_args(domains) + ['-w', WELL_KNOWN_ACME] 
+    args += acme_d_args(domains) + ['-w', WELL_KNOWN_ACME]
     args += ['--server', 'letsencrypt']
 
     if os.path.isfile(ACME_ACCOUNT_PERSIST):
@@ -476,6 +508,7 @@ def acme_issue(domains):
         set_issued(domains)
 
     return result.returncode
+
 
 def acme_install(domains):
     nginx_persist_dir = os.path.dirname(NGINX_CRT)
@@ -517,7 +550,6 @@ def config_preflight(production=True):
         all_log("You have a config for a wildcard domain (starts with _wildcard); it requires DNS mode (ACME_DNS)\n")
         sys.exit(1)
 
- 
     return domains
 
 
@@ -529,10 +561,12 @@ def nginx_start():
     else:
         nginx_restart()
 
+
 def nginx_configtest():
     config_preflight(False)
     result = shellrun('nginx -t')
     return result.returncode
+
 
 def nginx_restart():
     shellrun('nginx -s reload')
@@ -555,7 +589,8 @@ def cron_4hour(domains):
 
     # check expiration
 
-    shellrun("openssl x509 -noout -enddate -in {nginx_crt} > {nginx_crt}.expire".format(nginx_crt=NGINX_CRT))
+    shellrun(
+        "openssl x509 -noout -enddate -in {nginx_crt} > {nginx_crt}.expire".format(nginx_crt=NGINX_CRT))
 
     expire = read_file(NGINX_CRT + ".expire")
     if expire == "":
@@ -563,7 +598,8 @@ def cron_4hour(domains):
     else:
         expire = expire.strip().replace("notAfter=", "")
         try:
-            expire_date = datetime.datetime.strptime(expire, "%b %d %H:%M:%S %Y %Z")
+            expire_date = datetime.datetime.strptime(
+                expire, "%b %d %H:%M:%S %Y %Z")
         except ValueError:
             slack("can't parse certificate expiration date {}".format(expire))
             return
@@ -580,7 +616,6 @@ def main(argv):
 
     if len(argv) > 1 and argv[1] == 'configtest':
         sys.exit(configtest)
-
 
     if configtest != 0:
         all_log("nginx configtest returned non-zero code")
@@ -609,6 +644,7 @@ def main(argv):
             write_file(LAST_TIME_FILE, str(timestamp))
 
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv))

@@ -44,6 +44,7 @@ class TestResolveIP(unittest.TestCase):
         domains = [
             "google.com",
             "apple.com",
+            "microsoft.com"
         ]
 
         for domain in domains:
@@ -54,7 +55,7 @@ class TestResolveIP(unittest.TestCase):
         # List of strings that should match
         domains = [
             "this-doma1n-sh0uld-n0t-res0lve-pl3333ase.com",
-            "this-doma1n-sh0uld-n0t-res0lve-pl3333ase.net",
+            "doma1n-n0t-res0lve-pl3333ase.net",
             "test.non-existing-gtld"
         ]
 
