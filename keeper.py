@@ -10,7 +10,13 @@ import subprocess
 import zlib #for crc32
 import textwrap
 import json
-import requests
+import urllib.request 
+import urllib.error
+import random 
+
+
+# this will be replaced as to * in nginx 
+FS_WCARD = "_wildcard"
 
 # special file besides regular docker logging
 RENEW_LOG_FILE = "/persist/important.txt"
@@ -54,6 +60,7 @@ LAST_TIME_FILE = '/persist/last-time.txt'
 LAST_SLACK_CH_URL = '/persist/last-slack-ch.txt'
 
 
+
 def log_fmt(string):
     return "{} {}\n".format(time.strftime("%c"), string)
 
@@ -72,42 +79,78 @@ def all_log(string, flush=False):
 
 
 def resolve_ip(hostname, retry=True):
-    # using dns over https 
     endpoint = "https://cloudflare-dns.com/dns-query?name={}&type=A".format(hostname)
+    headers = {
+        "accept": "application/dns-json"
+    }
 
+    req = urllib.request.Request(endpoint, headers=headers)
+    
     try:
-        response = requests.get(
-            url=endpoint,
-            headers={"accept" : "application/dns-json"}
-        )
-        if response.status_code == 200:
-            jresp = response.json() 
-            if "Answer" in jresp: 
-                answer = jresp["Answer"]
-                if len(answer) > 0:
-                    return True 
-            
-        return False 
-    except (json.decoder.JSONDecodeError, requests.exceptions.RequestException) as e:
+        with urllib.request.urlopen(req) as response:
+            if response.status == 200:
+                data = response.read()
+                jresp = json.loads(data.decode('utf-8'))
+                if "Answer" in jresp:
+                    answer = jresp["Answer"]
+                    if len(answer) > 0:
+                        return True
+
+        return False
+
+    except (json.JSONDecodeError, urllib.error.URLError) as e:
         all_log('DNS-over-https request failed: {}'.format(e))
-        if retry: 
+        if retry:
             return resolve_ip(hostname, False)
 
 
+cached_ip = None
+
 def discover_my_ip():
-    ip_services = ["https://ifconfig.co/ip",
-                   "https://api.ipify.org/",
-                   "http://whatismyip.akamai.com/"]
+    global cached_ip
+
+    # Return cached IP if it exists
+    if cached_ip:
+        return cached_ip
+
+    ip_services = [
+        "https://ip4only.me/api/",
+        "https://ifconfig.co/ip",
+        "https://api.ipify.org/",
+        "http://whatismyip.akamai.com/"
+    ]
+
+    # Simple regular expression to validate IPv4 addresses
+    ipv4_pattern = re.compile(r"^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$")
 
     for ip_service in ip_services:
         try:
-            response = requests.get(url=ip_service)
-            if response.status_code == 200:
-                return response.content.decode("utf-8").strip() 
-        except requests.exceptions.RequestException:
+            with urllib.request.urlopen(ip_service) as response:
+                if response.status == 200:
+                    ip = response.read().decode("utf-8").strip()
+                    if ip.startswith("IPv4,"):
+                        # https://ip4only.me/ API
+                        # IPv4,1.2.3.4,v1.1,,,See http://ip6.me/docs/ for api documentation
+                        parts = ip.split(",")
+                        if len(parts) > 1:
+                            ip = parts[1]
+                    # Check if the IP looks like an IPv4 address
+                    if ipv4_pattern.match(ip):
+                        cached_ip = ip
+                        return ip
+        except urllib.error.URLError:
             print('HTTP Request failed to {}'.format(ip_service))
 
     return "unknown"
+
+
+def acme_dns():
+    if 'ACME_DNS' in os.environ:
+        arg = os.environ['ACME_DNS']
+        # sanitized to avoid command line injection
+        return re.sub('[^0-9a-zA-Z_]+', '_', arg)
+    return None
+
 
 def slack_url():
     return os.getenv('SLACK_CH_URL', '')
@@ -122,20 +165,28 @@ def slack(text):
     full_text = "nginx-auto-acme from {} : {}".format(discover_my_ip(), text)
 
     try:
-        response = requests.post(
-            url=slack_url(),
+        data = json.dumps({
+            "text": full_text
+        }).encode("utf-8")
+        
+        request = urllib.request.Request(
+            slack_url(),
+            data=data,
             headers={
                 "Content-Type": "application/json; charset=utf-8",
             },
-            data=json.dumps({
-                "text": full_text
-            })
+            method="POST"
         )
-        all_log('Slack response HTTP Status Code: {status_code}'.format(status_code=response.status_code))
-        all_log('Slack response HTTP Response Body: {content}'.format(content=response.content))
-    except requests.exceptions.RequestException:
+        with urllib.request.urlopen(request) as response:
+            all_log('Slack response HTTP Status Code: {status_code}'.format(status_code=response.status))
+            all_log('Slack response HTTP Response Body: {content}'.format(content=response.read()))
+
+    except urllib.error.URLError:
         all_log('Slack HTTP Request Failed')
 
+
+def fs_domain_replace(fs_domain):
+    return fs_domain.replace(FS_WCARD+".", "*.")
 
 def generate_dhparams():
     bits = 2048
@@ -207,11 +258,11 @@ def http_config(domain):
         }}
         """)
 
-    return template.format(domain=domain, acmeroot=WELL_KNOWN_ACME)
+    return template.format(domain=fs_domain_replace(domain), acmeroot=WELL_KNOWN_ACME)
 
 def https_config(domain, body):
-
     if re.search(r'server\s+{', body) is not None:
+        all_log("server blocks are not allowed, but found in " + domain + " config", True)
         return None
 
     sts = """add_header Strict-Transport-Security "max-age=63072000; includeSubDomains";"""
@@ -235,7 +286,8 @@ def https_config(domain, body):
             {body}
         }}
         """)
-    return template.format(domain=domain, body=body, key=NGINX_KEY, crt=NGINX_CRT, sts=sts)
+
+    return template.format(domain=fs_domain_replace(domain), body=body, key=NGINX_KEY, crt=NGINX_CRT, sts=sts)
 
 
 def tls_cert_exists():
@@ -264,13 +316,16 @@ def https_config_error(domain):
     sys.exit(1)
 
 
+def match_config(name):
+    # filter out files that does not contain dots, except in .conf
+    # allow _wildcard. @ start 
+    return re.compile('(?:_wildcard\\.)?[\\-a-z0-9\\.]+\\.[a-z0-9\\-]+\\.conf$').match(name)
+
+
 def read_conf_dir(path):
     conf_list = os.listdir(path)
 
-    # filter out files that does not contain dots, except in .conf
-    conf_regex = re.compile('[\\-\\w\\.]+\\.[\\w\\-]+\\.conf')
-
-    conf_list = filter(conf_regex.match, conf_list)
+    conf_list = filter(match_config, conf_list)
     conf_list = map(lambda x: x[:-5], conf_list)
     return sorted(conf_list)
 
@@ -336,8 +391,14 @@ def gen_config(production=True):
     domains = read_conf_dir(CONF_BODY_PATH)
 
     for domain in domains:
-        if not resolve_ip(domain):
-            slack("unable to resolve domain {}".format(domain))
+        dns_check = domain 
+
+        if domain.startswith("_wildcard."):
+            rnd = str(random.randint(1, 9999))
+            dns_check = domain.replace(FS_WCARD+".", "wildcard-check-"+rnd+".")
+
+        if not resolve_ip(dns_check):
+            slack("unable to resolve domain {}".format(dns_check))
             continue
 
         new_config = http_config(domain)
@@ -368,8 +429,9 @@ def acme_d_args(domains):
     args = []
     for domain in domains:
         args.append('-d')
-        args.append(domain)
+        args.append(fs_domain_replace(domain))
     return args
+
 
 def shellrun(args):
     cmd = args
@@ -395,12 +457,9 @@ def acme_issue(domains):
     shutil.rmtree(ACME_CERTS_PATH, ignore_errors=True)
 
     args = [ACME_SH, '--issue']
-    if 'ACME_DNS' in os.environ:
-        arg = os.environ['ACME_DNS']
-        # sanitized to avoid command line injection
-        arg = re.sub('[^0-9a-zA-Z_]+', '_', arg)
-        args += ['--dns', arg]
-
+    dns_arg = acme_dns()
+    if dns_arg is not None:
+        args += ['--dns', dns_arg]
 
     args += acme_d_args(domains) + ['-w', WELL_KNOWN_ACME] 
     args += ['--server', 'letsencrypt']
@@ -451,6 +510,13 @@ def config_preflight(production=True):
     if domains is None or len(domains) == 0:
         all_log("Cannot find any conf.body domains\n")
         sys.exit(1)
+
+    has_wildcard = any(map(lambda s: s.startswith(FS_WCARD + "."), domains))
+
+    if has_wildcard and acme_dns() is not None:
+        all_log("You have a config for a wildcard domain (starts with _wildcard); it requires DNS mode (ACME_DNS)\n")
+        sys.exit(1)
+
  
     return domains
 

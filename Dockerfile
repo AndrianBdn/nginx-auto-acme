@@ -2,7 +2,7 @@ FROM nginx:1.23.3-alpine
 
 RUN rm -f /etc/nginx/fastcgi* /etc/nginx/koi* /etc/nginx/win* /etc/nginx/*.default /etc/nginx/*_params /etc/conf.d/*.conf; \ 
     echo "ok" && \
-    apk update && apk add -u python3 py3-requests openssl curl git dumb-init && \
+    apk update && apk add -u python3 openssl curl git dumb-init && \
     mkdir /persist && \
     cd && git clone https://github.com/Neilpang/acme.sh.git acmegit && \
     cd acmegit && sh acme.sh \
