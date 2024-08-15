@@ -257,6 +257,7 @@ def ssl_config():
         ssl_session_cache shared:SSL:60m;
         ssl_stapling on;
         ssl_stapling_verify on;
+        ssl_session_timeout 1d;
         resolver 8.8.8.8 8.8.4.4 valid=300s;
         resolver_timeout 5s;
         """)
@@ -283,7 +284,7 @@ def http_config(domain):
     return template.format(domain=fs_domain_replace(domain), acmeroot=WELL_KNOWN_ACME)
 
 
-def https_config(domain, body):
+def https_config(domain, body, reuse_port):
     if re.search(r'server\s+{', body) is not None:
         all_log("server blocks are not allowed, but found in " +
                 domain + " config", True)
@@ -297,21 +298,36 @@ def https_config(domain, body):
 
     if lb.find("nginx-auto-acme-sts-preload") > -1:
         sts = """add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload";"""
+    
+    reuse_port_str = ""
+    if reuse_port:
+        reuse_port_str = " reuseport"
+
+    quic = ""
+    if lb.find("nginx-auto-acme-quic") > -1 or os.getenv('QUIC', '0') == '1':
+        quic = textwrap.dedent(
+            """
+            listen 443 quic{reuse_port_str};
+            ssl_early_data on;
+            add_header alt-svc 'h3=":443"; ma=86400';
+            """).format(reuse_port_str=reuse_port_str)
 
     template = textwrap.dedent(
         """
         server {{
             server_name {domain};
-            listen 443 ssl http2;
+            listen 443 ssl;
+            http2 on;
             {sts}
             ssl_certificate      {crt};
             ssl_certificate_key  {key};
             server_tokens        off;
+            {quic}
             {body}
         }}
         """)
 
-    return template.format(domain=fs_domain_replace(domain), body=body, key=NGINX_KEY, crt=NGINX_CRT, sts=sts)
+    return template.format(domain=fs_domain_replace(domain), body=body, quic=quic, key=NGINX_KEY, crt=NGINX_CRT, sts=sts)
 
 
 def tls_cert_exists():
@@ -418,6 +434,7 @@ def gen_config(production=True):
     # read user configs
     domains = read_conf_dir(CONF_BODY_PATH)
 
+    reuse_port = True 
     for domain in domains:
         dns_check = domain
 
@@ -433,7 +450,8 @@ def gen_config(production=True):
 
         if tls_cert_exists():
             config_body = read_file(CONF_BODY_PATH + domain + '.conf')
-            tls_config = https_config(domain, config_body)
+            tls_config = https_config(domain, config_body, reuse_port)
+            reuse_port = False # only first domain can use reuseport
             if https_config is None:
                 https_config_error(domain)
             new_config += tls_config

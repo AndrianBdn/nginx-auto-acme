@@ -14,14 +14,15 @@ With nginx-auto-acme you are getting:
 You put docker-compose.yml file to some directory on the server: 
 
 ```yaml  
-version: '2'
 services:
     nginx:
         image: andrianbdn/nginx-auto-acme 
         restart: unless-stopped
         environment:
             - SLACK_CH_URL=none
+            - QUIC=1
         ports:
+            - "443:443/udp"
             - "443:443"
             - "80:80"
         volumes:
@@ -134,14 +135,18 @@ nginx-auto-acme automatically adds [strict-transport-security](https://developer
 strict-transport-security: max-age=63072000; includeSubDomains
 ```
 
-Mentioning 'strict-transport-security' anywhere inside a nginx-auto-acme config will result the header not being added automatically.
+Mentioning 'strict-transport-security' anywhere (in comments) inside a nginx-auto-acme config will result the header not being added automatically.
 
-Mentioning 'nginx-auto-acme-sts-preload' anywhere in nginx-auto-acme config will make the STS header contain 'preload' directive. 
+Mentioning 'nginx-auto-acme-sts-preload' in comments of nginx-auto-acme config will make the STS header contain 'preload' directive. 
 
 ```
 strict-transport-security: max-age=63072000; includeSubDomains; preload
 ```
 
+## QUIC / HTTP3 
+
+Set env QUIC=1 (enables for all hosts) or mention `nginx-auto-acme-quic' in comments of server config to enable QUIC and HTTP3. 
+Don't forget to forward UDP ports in docker-compose. 
 
 
 ## Acknowledgments 
